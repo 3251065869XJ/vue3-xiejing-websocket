@@ -1,0 +1,1 @@
+npm install sockjs-client stompjs @vueuse/core
