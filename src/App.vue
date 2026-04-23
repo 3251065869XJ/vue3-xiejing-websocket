@@ -1,215 +1,1006 @@
 <template>
-  <div class="inventory-container">
-    <!-- 标题栏 + 操作按钮 -->
-    <div class="header-actions">
-      <div>
-        <h2 class="title">📦 库存水位监控表</h2>
-        <div class="tip">
-          💧 圆形水位图 = 实际库存 / 计划库存 × 100% &nbsp; | &nbsp; 高亮水位动态填充，百分比实时显示
+  <div class="page-container">
+    <el-button type="primary" size="large" class="open-btn" @click="dialogVisible = true">
+      访客接待
+    </el-button>
+    <el-button type="info" size="large" class="open-btn" @click="checkoutDialogVisible = true">
+        访客签离
+    </el-button>
+
+    <!-- 访客接待对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      title="访客接待刷卡"
+      :width="dialogWidth"
+      :close-on-click-modal="false"
+      class="reception-dialog"
+      @close="resetDialog"
+    >
+      <div class="dialog-layout">
+        <!-- 左右布局区域 -->
+        <div class="top-layout">
+          <!-- 左侧：接待人信息 -->
+          <div class="left-panel card-panel">
+            <div class="panel-header">
+              <el-icon><UserFilled /></el-icon>
+              <h3 class="section-title">接待人信息</h3>
+            </div>
+            <el-form label-width="80px" label-position="top">
+              <el-form-item label="选择产品">
+                <el-select
+                  v-model="selectedProduct"
+                  placeholder="请选择接待产品"
+                  style="width: 100%"
+                  @change="checkReceptionistPermission"
+                >
+                  <el-option
+                    v-for="product in productList"
+                    :key="product"
+                    :label="product"
+                    :value="product"
+                  />
+                </el-select>
+              </el-form-item>
+
+              <el-form-item label="刷卡(工号)">
+                <div class="card-input-group">
+                  <el-input
+                    v-model="receptionistCardCode"
+                    placeholder="请刷工卡或输入工号"
+                    clearable
+                    @keyup.enter="handleReceptionistCard"
+                  />
+                  <el-button type="primary" @click="handleReceptionistCard">刷卡</el-button>
+                </div>
+              </el-form-item>
+
+              <!-- 接待人信息展示 -->
+              <div v-if="receptionistInfo.name" class="receptionist-info">
+                <el-descriptions :column="1" border size="small">
+                  <el-descriptions-item label="姓名">{{ receptionistInfo.name }}</el-descriptions-item>
+                  <el-descriptions-item label="工号">{{ receptionistInfo.employeeId }}</el-descriptions-item>
+                  <el-descriptions-item label="部门">{{ receptionistInfo.department }}</el-descriptions-item>
+                </el-descriptions>
+                <el-alert
+                  v-if="permissionError"
+                  title="没有该产品的接待权限"
+                  type="error"
+                  :closable="false"
+                  show-icon
+                  class="permission-alert"
+                />
+              </div>
+            </el-form>
+          </div>
+
+          <!-- 右侧：访客区域 -->
+          <div class="right-panel card-panel">
+            <div class="panel-header">
+              <el-icon><User /></el-icon>
+              <h3 class="section-title">访客信息登记</h3>
+            </div>
+            <div class="visitor-type">
+              <span class="type-label">访客类型：</span>
+              <el-radio-group v-model="visitorType">
+                <el-radio label="internal">外部门员工(有工卡)</el-radio>
+                <el-radio label="external">外公司人员(无工卡)</el-radio>
+              </el-radio-group>
+            </div>
+
+            <!-- 外部门员工刷卡区域 -->
+            <div v-if="visitorType === 'internal'" class="internal-card-area">
+              <div class="card-input-group">
+                <el-input
+                  v-model="internalEmployeeCode"
+                  placeholder="请刷工卡或输入工号"
+                  clearable
+                  @keyup.enter="handleInternalCard"
+                />
+                <el-button type="primary" @click="handleInternalCard">刷卡</el-button>
+              </div>
+              <div v-if="internalVisitorInfo.name" class="visitor-preview">
+                <el-descriptions :column="1" border size="small">
+                  <el-descriptions-item label="姓名">{{ internalVisitorInfo.name }}</el-descriptions-item>
+                  <el-descriptions-item label="工号">{{ internalVisitorInfo.employeeId }}</el-descriptions-item>
+                  <el-descriptions-item label="部门">{{ internalVisitorInfo.department }}</el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+
+            <!-- 外公司人员手动填写区域 -->
+            <div v-if="visitorType === 'external'" class="external-form">
+              <el-form label-width="80px" label-position="top">
+                <el-form-item label="姓名">
+                  <el-input v-model="externalVisitor.name" placeholder="请输入姓名" clearable />
+                </el-form-item>
+                <el-form-item label="来访公司">
+                  <el-input v-model="externalVisitor.company" placeholder="请输入公司名称" clearable />
+                </el-form-item>
+                <el-form-item label="身份证号">
+                  <el-input
+                    v-model="externalVisitor.idNumber"
+                    placeholder="请输入身份证号(选填)"
+                    clearable
+                  />
+                </el-form-item>
+              </el-form>
+            </div>
+
+            <el-button
+              type="success"
+              :disabled="!canConfirmVisitor"
+              @click="addVisitorToList"
+              class="confirm-visitor-btn"
+            >
+              确认信息无误，添加访客
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 下侧布局：访客列表 + 确认接待按钮 -->
+        <div class="bottom-layout card-panel">
+          <div class="visitor-list-header">
+            <div class="panel-header-sm">
+              <el-icon><List /></el-icon>
+              <span class="section-title">待接待访客列表</span>
+            </div>
+            <span class="list-count" v-if="visitorList.length">共 {{ visitorList.length }} 人</span>
+          </div>
+          <div class="visitor-table-wrapper">
+            <el-table :data="visitorList" border stripe style="width: 100%" :header-cell-style="{ background: '#f8fafc' }">
+              <el-table-column prop="name" label="姓名" width="120" />
+              <el-table-column prop="typeLabel" label="访客类型" width="140" />
+              <el-table-column prop="identityInfo" label="身份信息" min-width="200" />
+              <el-table-column label="操作" width="80" align="center">
+                <template #default="{ $index }">
+                  <el-button link type="danger" @click="removeVisitor($index)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="confirm-reception-btn-wrapper">
+            <el-button type="primary" size="large" round class="submit-btn" @click="submitReception">确认接待</el-button>
+          </div>
         </div>
       </div>
-      <div class="action-buttons">
-        <el-button type="primary" plain @click="randomUpdateSingleRow">
-          ✨ 随机更新单行
-        </el-button>
-        <el-button type="success" @click="randomBatchUpdate">
-          🔄 批量刷新数据
-        </el-button>
-      </div>
-    </div>
+    </el-dialog>
 
-    <!-- 表格 -->
-    <el-table
-      :data="tableData"
-      stripe
-      border
-      style="width: 100%"
-      :header-cell-style="{ background: '#f8fafc', color: '#1e293b', fontWeight: '600' }"
+    <!-- 访客签离对话框 -->
+    <el-dialog
+      v-model="checkoutDialogVisible"
+      title="访客签离确认"
+      :width="dialogWidth"
+      :close-on-click-modal="false"
+      class="reception-dialog checkout-dialog"
     >
-      <el-table-column prop="id" label="ID" width="70" align="center" />
-      <el-table-column prop="name" label="商品名称" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="planStock" label="📊 计划库存数" width="130" align="center">
-        <template #default="{ row }">
-          <span style="font-weight: 500;">{{ row.planStock }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="actualStock" label="📈 实际库存数" width="130" align="center">
-        <template #default="{ row }">
-          <span :style="{ color: row.actualStock > row.planStock ? '#16a34a' : '#475569' }">
-            {{ row.actualStock }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="💧 水位图 (圆形动态)" width="120" align="center">
-        <template #default="{ row }">
-          <WaterLevelCircle :plan-stock="row.planStock" :actual-stock="row.actualStock" />
-        </template>
-      </el-table-column>
-      <el-table-column label="📌 水位状态" width="130" align="center">
-        <template #default="{ row }">
-          <el-tag :type="getStockStatus(row)" size="small" effect="light" style="border-radius: 20px;">
-            {{ getStockText(row) }}
-          </el-tag>
-          <div style="font-size: 12px; color: #5b6e8c; margin-top: 4px;">
-            完成率: {{ getCompletionRate(row) }}%
+      <div class="dialog-layout">
+        <div class="top-layout checkout-header">
+          <div class="filter-product">
+            <span class="filter-label">选择产品：</span>
+            <el-select v-model="selectedCheckoutProduct" placeholder="请选择产品" style="width: 200px">
+              <el-option
+                v-for="product in productList"
+                :key="product"
+                :label="product"
+                :value="product"
+              />
+            </el-select>
           </div>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="100" align="center" fixed="right">
-        <template #default="{ row, $index }">
-          <el-button link type="primary" size="small" @click="adjustActualStock(row)">
-            调整实际
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+        </div>
 
-    <!-- 说明信息 -->
-    <div class="footer-note">
-      <div>
-        🧩 <strong>水位图说明：</strong> 圆形区域蓝色填充比例 = (实际库存 / 计划库存) ，百分比动态显示在圆心。
-        支持计划库存、实际库存动态传入，水位实时重绘。
+        <div class="visitor-list-wrapper">
+          <el-table :data="filteredCheckinVisitors" border stripe style="width: 100%">
+            <el-table-column prop="name" label="姓名" width="120" />
+            <el-table-column prop="typeLabel" label="访客类型" width="140" />
+            <el-table-column prop="identityInfo" label="身份信息" min-width="200" />
+            <el-table-column label="签离操作" width="280" align="center">
+              <template #default="{ row }">
+                <div v-if="row.type === 'internal'" class="checkout-input-group">
+                  <el-input
+                    v-model="row.checkoutCode"
+                    placeholder="请刷工卡"
+                    size="small"
+                    style="width: 140px"
+                    @keyup.enter="confirmCheckout(row)"
+                  />
+                  <el-button type="primary" size="small" @click="confirmCheckout(row)">确认离开</el-button>
+                </div>
+                <div v-else class="checkout-input-group">
+                  <el-input
+                    v-model="row.idNumber"
+                    placeholder="输入身份证号"
+                    size="small"
+                    style="width: 180px"
+                    @keyup.enter="confirmCheckout(row)"
+                  />
+                  <el-button type="primary" size="small" @click="confirmCheckout(row)">确认离开</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="filteredCheckinVisitors.length === 0" description="暂无待签离访客" />
+        </div>
       </div>
-      <div>
-        💡 <strong>动态演示：</strong> 点击上方按钮可随机修改数据，水位图及百分比会立刻响应变化。
-      </div>
-    </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { ElMessage } from 'element-plus';
-import WaterLevelCircle from '@/views/WaterLevelCircle.vue';
+import { ref, computed, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { UserFilled, User, List } from '@element-plus/icons-vue'
 
-// 模拟数据
-const tableData = ref([
-  { id: 1, name: '智能办公笔记本', planStock: 120, actualStock: 87 },
-  { id: 2, name: '无线静音鼠标', planStock: 200, actualStock: 156 },
-  { id: 3, name: '机械键盘 (RGB)', planStock: 80, actualStock: 80 },
-  { id: 4, name: 'Type-C 扩展坞', planStock: 50, actualStock: 12 },
-  { id: 5, name: '4K 便携显示器', planStock: 30, actualStock: 29 },
-  { id: 6, name: '氮化镓充电器', planStock: 150, actualStock: 210 },
-  { id: 7, name: '降噪蓝牙耳机', planStock: 90, actualStock: 45 },
-  { id: 8, name: '移动固态硬盘 1TB', planStock: 60, actualStock: 0 }
-]);
+// 对话框宽度（屏幕宽度的90%）
+const dialogWidth = '90%'
+const dialogVisible = ref(false)
 
-// 辅助函数：完成率
-const getCompletionRate = (row) => {
-  if (row.planStock <= 0) return 0;
-  return Math.min(100, Math.round((row.actualStock / row.planStock) * 100));
-};
+// ---------- Mock 数据 ----------
+// 产品列表
+const productList = ['产品A', '产品B', '产品C']
 
-// 状态标签类型
-const getStockStatus = (row) => {
-  if (row.planStock <= 0) return 'info';
-  const ratio = row.actualStock / row.planStock;
-  if (ratio >= 1) return 'success';
-  if (ratio >= 0.6) return 'warning';
-  return 'danger';
-};
+// 接待人数据（模拟数据库）
+const receptionistDB = [
+  { employeeId: 'R1001', name: '张佳怡', department: '接待部', accessibleProducts: ['产品A', '产品B'] },
+  { employeeId: 'R1002', name: '李振国', department: '行政部', accessibleProducts: ['产品B', '产品C'] },
+  { employeeId: 'R1003', name: '王雅茹', department: '市场部', accessibleProducts: ['产品A'] }
+]
 
-// 状态文本
-const getStockText = (row) => {
-  if (row.planStock <= 0) return '计划无效';
-  const ratio = row.actualStock / row.planStock;
-  if (ratio >= 1) return '库存充足';
-  if (ratio >= 0.6) return '正常水位';
-  if (ratio >= 0.2) return '偏低库存';
-  return '紧急补货';
-};
+// 外部门员工数据（模拟其他部门员工）
+const internalStaffDB = [
+  { employeeId: 'E2001', name: '赵一航', department: '技术研发部' },
+  { employeeId: 'E2002', name: '钱小美', department: '销售部' },
+  { employeeId: 'E2003', name: '孙立军', department: '产品部' }
+]
 
-// 随机更新单行
-const randomUpdateSingleRow = () => {
-  if (!tableData.value.length) return;
-  const randomIndex = Math.floor(Math.random() * tableData.value.length);
-  const row = tableData.value[randomIndex];
-  const changeType = Math.random() > 0.6 ? 'plan' : 'actual';
-  if (changeType === 'plan') {
-    let delta = Math.floor(Math.random() * 40) + 10;
-    let newPlan = row.planStock + (Math.random() > 0.5 ? delta : -delta);
-    if (newPlan < 5) newPlan = 5;
-    row.planStock = Math.floor(newPlan);
-  } else {
-    let delta = Math.floor(Math.random() * 70) - 20;
-    let newActual = row.actualStock + delta;
-    if (newActual < 0) newActual = 0;
-    row.actualStock = Math.floor(newActual);
+// ---------- 左侧接待人状态 ----------
+const selectedProduct = ref(productList[0])
+const receptionistCardCode = ref('')
+const receptionistInfo = ref({ name: '', employeeId: '', department: '' })
+const permissionError = ref(false)
+
+// 刷卡：获取接待人信息并检查权限
+const handleReceptionistCard = () => {
+  const code = receptionistCardCode.value.trim()
+  if (!code) {
+    ElMessage.warning('请输入或刷卡读取工号')
+    return
   }
-  // 触发响应式更新
-  tableData.value = [...tableData.value];
-  ElMessage.success(`已更新商品 “${row.name}” 的库存数据，水位图已动态刷新`);
-};
+  const found = receptionistDB.find(item => item.employeeId === code)
+  if (!found) {
+    ElMessage.error('未找到该接待人工号，请重试')
+    receptionistInfo.value = { name: '', employeeId: '', department: '' }
+    permissionError.value = false
+    return
+  }
+  receptionistInfo.value = {
+    name: found.name,
+    employeeId: found.employeeId,
+    department: found.department
+  }
+  checkReceptionistPermission()
+}
 
-// 批量刷新数据
-const randomBatchUpdate = () => {
-  tableData.value = tableData.value.map(item => {
-    let newPlan = item.planStock + (Math.random() > 0.7 ? Math.floor(Math.random() * 30) - 10 : 0);
-    if (newPlan < 5) newPlan = 5;
-    let newActual = item.actualStock + (Math.random() > 0.6 ? Math.floor(Math.random() * 50) - 15 : 0);
-    if (newActual < 0) newActual = 0;
-    return {
-      ...item,
-      planStock: Math.floor(newPlan),
-      actualStock: Math.floor(newActual)
-    };
-  });
-  ElMessage.success('批量数据已刷新，所有水位图动态更新');
-};
+// 检查当前接待人是否有选中产品的权限
+const checkReceptionistPermission = () => {
+  if (!receptionistInfo.value.employeeId) {
+    permissionError.value = false
+    return
+  }
+  const found = receptionistDB.find(item => item.employeeId === receptionistInfo.value.employeeId)
+  if (found && found.accessibleProducts.includes(selectedProduct.value)) {
+    permissionError.value = false
+  } else {
+    permissionError.value = true
+  }
+}
 
-// 调整实际库存（行内操作）
-const adjustActualStock = (row) => {
-  let delta = Math.floor(Math.random() * 30) + 5;
-  let newActual = row.actualStock + (Math.random() > 0.5 ? delta : -delta);
-  if (newActual < 0) newActual = 0;
-  row.actualStock = newActual;
-  tableData.value = [...tableData.value];
-  ElMessage.info(`商品「${row.name}」实际库存已调整`);
-};
+// 监听产品变化，重新检查权限
+watch(selectedProduct, () => {
+  if (receptionistInfo.value.employeeId) {
+    checkReceptionistPermission()
+  }
+})
+
+// ---------- 右侧访客状态 ----------
+const visitorType = ref('internal') // 'internal' 或 'external'
+
+// 外部门员工刷卡相关
+const internalEmployeeCode = ref('')
+const internalVisitorInfo = ref({ name: '', employeeId: '', department: '' })
+
+// 外公司人员表单
+const externalVisitor = ref({ name: '', company: '', idNumber: '' })
+
+// 访客列表（下方展示）
+const visitorList = ref([])
+
+// 右侧“确认信息无误”按钮是否可用
+const canConfirmVisitor = computed(() => {
+  if (visitorType.value === 'internal') {
+    return !!internalVisitorInfo.value.name
+  } else {
+    return !!(externalVisitor.value.name && externalVisitor.value.company)
+  }
+})
+
+// 外部门员工刷卡逻辑
+const handleInternalCard = () => {
+  const code = internalEmployeeCode.value.trim()
+  if (!code) {
+    ElMessage.warning('请输入或刷卡读取工号')
+    return
+  }
+  const found = internalStaffDB.find(item => item.employeeId === code)
+  if (!found) {
+    ElMessage.error('未找到该外部门员工信息')
+    internalVisitorInfo.value = { name: '', employeeId: '', department: '' }
+    return
+  }
+  internalVisitorInfo.value = {
+    name: found.name,
+    employeeId: found.employeeId,
+    department: found.department
+  }
+  ElMessage.success(`已读取员工：${found.name}`)
+}
+
+// 添加访客至列表
+const addVisitorToList = () => {
+  if (visitorType.value === 'internal') {
+    const visitor = internalVisitorInfo.value
+    if (!visitor.name) {
+      ElMessage.warning('请先刷卡获取外部门员工信息')
+      return
+    }
+    visitorList.value.push({
+      id: Date.now() + Math.random(),
+      name: visitor.name,
+      typeLabel: '外部门员工',
+      identityInfo: `工号：${visitor.employeeId} ｜ 部门：${visitor.department}`,
+      rawData: { ...visitor, type: 'internal' }
+    })
+    // 清空内部刷卡区域
+    internalEmployeeCode.value = ''
+    internalVisitorInfo.value = { name: '', employeeId: '', department: '' }
+    ElMessage.success('访客已添加至待接待列表')
+  } else {
+    const { name, company, idNumber } = externalVisitor.value
+    if (!name || !company) {
+      ElMessage.warning('请完整填写姓名和来访公司')
+      return
+    }
+    const identityInfo = `公司：${company} ${idNumber ? `｜ 身份证：${idNumber}` : ''}`
+    visitorList.value.push({
+      id: Date.now() + Math.random(),
+      name,
+      typeLabel: '外公司人员',
+      identityInfo,
+      rawData: { name, company, idNumber, type: 'external' }
+    })
+    // 清空外部表单
+    externalVisitor.value = { name: '', company: '', idNumber: '' }
+    ElMessage.success('访客已添加至待接待列表')
+  }
+}
+
+// 删除访客
+const removeVisitor = (index) => {
+  visitorList.value.splice(index, 1)
+  ElMessage.info('已移除该访客')
+}
+
+// 提交全部接待
+const submitReception = () => {
+  // 校验接待人是否已刷卡
+  if (!receptionistInfo.value.employeeId) {
+    ElMessage.error('请先完成接待人刷卡')
+    return
+  }
+  // 校验接待权限
+  if (permissionError.value) {
+    ElMessage.error('当前接待人没有所选产品的接待权限，无法进行接待')
+    return
+  }
+  if (visitorList.value.length === 0) {
+    ElMessage.warning('请至少添加一位访客')
+    return
+  }
+
+  // 组装提交数据
+  const submitData = {
+    receptionist: {
+      ...receptionistInfo.value,
+      product: selectedProduct.value
+    },
+    visitors: visitorList.value.map(v => v.rawData),
+    totalCount: visitorList.value.length
+  }
+  console.log('提交接待信息：', submitData)
+  ElMessageBox.alert(
+    `接待人：${submitData.receptionist.name}（${submitData.receptionist.employeeId}）\n产品：${submitData.receptionist.product}\n访客数量：${submitData.totalCount}人\n详情请查看控制台`,
+    '提交成功',
+    { type: 'success', confirmButtonText: '确定' }
+  ).then(() => {
+    dialogVisible.value = false
+  })
+}
+
+// 重置对话框所有状态
+const resetDialog = () => {
+  // 左侧重置
+  selectedProduct.value = productList[0]
+  receptionistCardCode.value = ''
+  receptionistInfo.value = { name: '', employeeId: '', department: '' }
+  permissionError.value = false
+  // 右侧重置
+  visitorType.value = 'internal'
+  internalEmployeeCode.value = ''
+  internalVisitorInfo.value = { name: '', employeeId: '', department: '' }
+  externalVisitor.value = { name: '', company: '', idNumber: '' }
+  // 访客列表清空
+  visitorList.value = []
+}
+
+// 访客签离对话框开关
+const checkoutDialogVisible = ref(false)
+
+// ---------- 模拟已接待未签离的访客数据 ----------
+// 实际项目中应由后端提供，这里预设一些示例数据
+const checkedInVisitors = ref([
+  {
+    id: 1,
+    name: '赵一航',
+    type: 'internal',
+    typeLabel: '外部门员工',
+    employeeId: 'E2001',
+    department: '技术研发部',
+    identityInfo: '工号：E2001 ｜ 部门：技术研发部',
+    product: '产品A',
+    checkoutCode: '', // 用于临时存储刷卡输入
+    idNumber: ''      // 用于外公司人员身份证输入
+  },
+  {
+    id: 2,
+    name: '孙立军',
+    type: 'internal',
+    typeLabel: '外部门员工',
+    employeeId: 'E2003',
+    department: '产品部',
+    identityInfo: '工号：E2003 ｜ 部门：产品部',
+    product: '产品B',
+    checkoutCode: ''
+  },
+  {
+    id: 3,
+    name: '李华',
+    type: 'external',
+    typeLabel: '外公司人员',
+    company: '云创科技',
+    idNumber: '410***********001',
+    identityInfo: '公司：云创科技 ｜ 身份证：410***********001',
+    product: '产品A',
+    checkoutCode: '',
+    idNumberForCheckout: '' // 签离时输入的身份证
+  },
+  {
+    id: 4,
+    name: '王明',
+    type: 'external',
+    typeLabel: '外公司人员',
+    company: '智联未来',
+    idNumber: '420***********002',
+    identityInfo: '公司：智联未来 ｜ 身份证：420***********002',
+    product: '产品C',
+    checkoutCode: '',
+    idNumberForCheckout: ''
+  }
+])
+
+// 产品列表（与接待对话框保持一致）
+// const productList = ['产品A', '产品B', '产品C']
+
+// 签离对话框选中的产品
+const selectedCheckoutProduct = ref(productList[0])
+
+// 根据所选产品筛选待签离访客
+const filteredCheckinVisitors = computed(() => {
+  return checkedInVisitors.value.filter(v => v.product === selectedCheckoutProduct.value)
+})
+
+// 确认签离
+const confirmCheckout = (row) => {
+  if (row.type === 'internal') {
+    const code = row.checkoutCode?.trim()
+    if (!code) {
+      ElMessage.warning('请刷卡或输入工号')
+      return
+    }
+    if (code !== row.employeeId) {
+      ElMessage.error('工号不匹配，签离失败')
+      return
+    }
+    // 签离成功，从列表中删除
+    const index = checkedInVisitors.value.findIndex(v => v.id === row.id)
+    if (index !== -1) {
+      checkedInVisitors.value.splice(index, 1)
+      ElMessage.success(`${row.name} 签离成功`)
+    }
+  } else {
+    const idNum = row.idNumberForCheckout?.trim()
+    if (!idNum) {
+      ElMessage.warning('请输入身份证号')
+      return
+    }
+    if (idNum !== row.idNumber) {
+      ElMessage.error('身份证号不匹配，签离失败')
+      return
+    }
+    const index = checkedInVisitors.value.findIndex(v => v.id === row.id)
+    if (index !== -1) {
+      checkedInVisitors.value.splice(index, 1)
+      ElMessage.success(`${row.name} 签离成功`)
+    }
+  }
+}
+
 </script>
 
 <style scoped>
-.inventory-container {
-  background: white;
-  border-radius: 24px;
-  padding: 20px 24px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
-}
-.header-actions {
+.page-container {
+  padding: 40px;
+  min-height: 100vh;
+  background: linear-gradient(145deg, #f3f6fa 0%, #eef2f5 100%);
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  justify-content: center;
+  align-items: center;
 }
-.title {
+
+.open-btn {
+  padding: 12px 28px;
+  font-size: 16px;
+  border-radius: 32px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.open-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 对话框整体样式 */
+.reception-dialog :deep(.el-dialog) {
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.15);
+}
+
+.reception-dialog :deep(.el-dialog__header) {
+  margin: 0;
+  padding: 20px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #eff2f6;
+}
+
+.reception-dialog :deep(.el-dialog__title) {
+  font-size: 20px;
   font-weight: 600;
-  margin: 0 0 8px 0;
-  color: #1e293b;
+  color: #1e2a3a;
 }
-.tip {
-  font-size: 14px;
-  color: #5e5e6e;
-  background: #eef2ff;
-  padding: 8px 16px;
-  border-radius: 12px;
-  display: inline-block;
+
+.reception-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: #f8fafc;
 }
-.action-buttons {
+
+.dialog-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.top-layout {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.card-panel {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s;
+  overflow: hidden;
+}
+
+.card-panel:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.left-panel,
+.right-panel {
+  flex: 1;
+  min-width: 280px;
+  padding: 18px 20px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #eef2f8;
+}
+
+.panel-header .el-icon {
+  font-size: 22px;
+  color: #3b82f6;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 540;
+  margin: 0;
+  color: #1f2f3d;
+  letter-spacing: 0.3px;
+}
+
+.card-input-group {
   display: flex;
   gap: 12px;
+  width: 100%;
 }
-.footer-note {
-  margin-top: 24px;
-  background: #f9f9fc;
-  border-radius: 16px;
-  padding: 12px 20px;
-  font-size: 13px;
-  color: #4b5563;
+
+.card-input-group .el-input {
+  flex: 1;
+}
+
+.receptionist-info {
+  margin-top: 18px;
+  animation: fadeIn 0.2s;
+}
+
+.permission-alert {
+  margin-top: 12px;
+  border-radius: 12px;
+}
+
+.visitor-type {
+  margin-bottom: 20px;
   display: flex;
+  align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
+  background: #f9fbfd;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #eef2f8;
+}
+
+.type-label {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.internal-card-area,
+.external-form {
+  margin-top: 12px;
+  margin-bottom: 20px;
+}
+
+.visitor-preview {
+  margin-top: 14px;
+}
+
+.confirm-visitor-btn {
+  width: 100%;
+  margin-top: 12px;
+  font-weight: 500;
+  border-radius: 40px;
+  padding: 10px 0;
+  background: #10b981;
+  border-color: #10b981;
+  transition: all 0.2s;
+}
+
+.confirm-visitor-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+}
+
+.bottom-layout {
+  padding: 18px 20px;
+}
+
+.visitor-list-header {
+  display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eef2f8;
+}
+
+.panel-header-sm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-header-sm .el-icon {
+  font-size: 18px;
+  color: #3b82f6;
+}
+
+.panel-header-sm .section-title {
+  font-size: 17px;
+  font-weight: 540;
+}
+
+.list-count {
+  font-size: 13px;
+  background: #eff3f8;
+  padding: 4px 10px;
+  border-radius: 30px;
+  color: #4b5563;
+}
+
+.visitor-table-wrapper {
+  margin-bottom: 24px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* 表格圆角优化 */
+.visitor-table-wrapper :deep(.el-table) {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.visitor-table-wrapper :deep(.el-table th) {
+  background-color: #f8fafc;
+  font-weight: 500;
+  color: #334155;
+}
+
+.visitor-table-wrapper :deep(.el-table__row:hover) {
+  background-color: #fefce8;
+}
+
+.confirm-reception-btn-wrapper {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.submit-btn {
+  padding: 10px 32px;
+  border-radius: 40px;
+  font-weight: 500;
+  background: #3b82f6;
+  border: none;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2);
+  transition: all 0.2s;
+}
+
+.submit-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(59, 130, 246, 0.25);
+}
+
+/* 滚动条美化 */
+.visitor-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.visitor-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.visitor-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.visitor-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 原有样式保留，新增签离相关样式 */
+.page-container {
+  padding: 40px;
+  min-height: 100vh;
+  background: linear-gradient(145deg, #f3f6fa 0%, #eef2f5 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.button-group {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.open-btn {
+  padding: 12px 28px;
+  font-size: 16px;
+  border-radius: 32px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.open-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 签离对话框头部 */
+.checkout-header {
+  margin-bottom: 20px;
+  justify-content: flex-start;
+}
+
+.filter-product {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 8px 16px;
+  border-radius: 40px;
+}
+
+.filter-label {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.visitor-list-wrapper {
+  margin-top: 8px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.checkout-input-group {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 复用接待对话框的卡片样式 */
+.reception-dialog :deep(.el-dialog) {
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.15);
+}
+
+.reception-dialog :deep(.el-dialog__header) {
+  margin: 0;
+  padding: 20px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #eff2f6;
+}
+
+.reception-dialog :deep(.el-dialog__title) {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e2a3a;
+}
+
+.reception-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: #f8fafc;
+}
+
+/* 其他已有样式保持不变，此处省略重复部分（实际项目中应合并） */
+/* 为保证代码可运行，以下补充必要的旧样式（仅作占位，实际应包含完整原样式） */
+.dialog-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.top-layout {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.card-panel {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+}
+.left-panel, .right-panel {
+  flex: 1;
+  min-width: 280px;
+  padding: 18px 20px;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #eef2f8;
+  padding-bottom: 10px;
+}
+.section-title {
+  font-size: 18px;
+  font-weight: 540;
+  margin: 0;
+  color: #1f2f3d;
+}
+.card-input-group {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+.visitor-type {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #f9fbfd;
+  padding: 10px 14px;
+  border-radius: 14px;
+}
+.confirm-visitor-btn {
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 40px;
+  background: #10b981;
+}
+.bottom-layout {
+  padding: 18px 20px;
+}
+.visitor-list-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.visitor-table-wrapper {
+  margin-bottom: 24px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.confirm-reception-btn-wrapper {
+  display: flex;
+  justify-content: flex-end;
+}
+.submit-btn {
+  padding: 10px 32px;
+  border-radius: 40px;
+  background: #3b82f6;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .top-layout {
+    flex-direction: column;
+  }
+  .card-input-group {
+    flex-wrap: wrap;
+  }
+  .confirm-reception-btn-wrapper {
+    justify-content: stretch;
+  }
+  .submit-btn {
+    width: 100%;
+  }
 }
 </style>
