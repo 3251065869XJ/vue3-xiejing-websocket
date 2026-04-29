@@ -1,0 +1,16 @@
+<!-- ReceptionistMapper.xml -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.visitor.mapper.ReceptionistMapper">
+    <select id="findByEmployeeId" resultType="com.example.visitor.entity.Receptionist">
+        SELECT id, employee_id, name, department
+        FROM receptionist
+        WHERE employee_id = #{employeeId}
+    </select>
+
+    <select id="findProductsByReceptionistId" resultType="java.lang.String">
+        SELECT product
+        FROM receptionist_product_permission
+        WHERE receptionist_id = #{receptionistId}
+    </select>
+</mapper>

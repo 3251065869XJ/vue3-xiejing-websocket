@@ -1,0 +1,54 @@
+<!-- VisitorReceptionMapper.xml -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.visitor.mapper.VisitorReceptionMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO visitor_reception (
+            session_id, visitor_name, visitor_type, employee_id, department,
+            company, id_number, checkout_status, create_time
+        ) VALUES (
+            #{sessionId}, #{visitorName}, #{visitorType}, #{employeeId}, #{department},
+            #{company}, #{idNumber}, #{checkoutStatus}, #{createTime}
+        )
+    </insert>
+
+    <select id="findUncheckedByProduct" resultType="com.example.visitor.vo.VisitorReceptionVO">
+        SELECT
+            vr.id,
+            vr.visitor_name AS visitorName,
+            CASE vr.visitor_type
+                WHEN 0 THEN '外部门员工'
+                ELSE '外公司人员'
+            END AS typeLabel,
+            CONCAT(
+                IF(vr.visitor_type = 0,
+                   CONCAT('工号：', vr.employee_id, ' ｜ 部门：', vr.department),
+                   CONCAT('公司：', vr.company, IF(vr.id_number IS NOT NULL, CONCAT(' ｜ 身份证：', vr.id_number), ''))
+                )
+            ) AS identityInfo,
+            vr.visitor_type AS visitorType,
+            vr.employee_id AS employeeId,
+            vr.department,
+            vr.company,
+            vr.id_number AS idNumber,
+            vr.checkout_status AS checkoutStatus,
+            vr.checkout_time AS checkoutTime
+        FROM visitor_reception vr
+        JOIN reception_session rs ON vr.session_id = rs.id
+        WHERE rs.product = #{product} AND vr.checkout_status = 0
+        ORDER BY vr.create_time DESC
+    </select>
+
+    <select id="selectById" resultType="com.example.visitor.entity.VisitorReception">
+        SELECT id, session_id, visitor_name, visitor_type, employee_id,
+               department, company, id_number, checkout_status, checkout_time, create_time
+        FROM visitor_reception
+        WHERE id = #{id}
+    </select>
+
+    <update id="updateCheckoutStatus">
+        UPDATE visitor_reception
+        SET checkout_status = 1, checkout_time = #{checkoutTime}
+        WHERE id = #{id}
+    </update>
+</mapper>
