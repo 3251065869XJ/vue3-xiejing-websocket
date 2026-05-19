@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.attendance.mapper.AttendanceMapper">
+    
+    <!-- 根据部门ID、日期、班次统计汇总指标 -->
+    <select id="sumMetricsByDeptId" resultType="java.util.HashMap">
+        SELECT 
+            COUNT(DISTINCT e.id) AS system_manpower,
+            SUM(CASE WHEN a.is_actual_attendance = 1 THEN 1 ELSE 0 END) AS actual_attendance,
+            SUM(CASE WHEN a.is_inventory = 1 THEN 1 ELSE 0 END) AS inventory_manpower,
+            SUM(CASE WHEN a.receive_flag = 1 THEN 1 ELSE 0 END) AS receive_count,
+            SUM(CASE WHEN a.support_flag = 1 THEN 1 ELSE 0 END) AS support_count
+        FROM employee e
+        LEFT JOIN attendance_daily a ON e.id = a.employee_id 
+            AND a.date = #{date} 
+            AND a.shift = #{shift}
+        WHERE e.dept_id = #{deptId}
+    </select>
+
+    <!-- 明细查询：返回部门下所有员工在指定日期的出勤详情 -->
+    <select id="selectDetailByDeptAndShift" resultType="com.example.attendance.vo.AttendanceDetailVO">
+        SELECT 
+            e.section AS section,
+            e.name AS name,
+            e.employee_no AS employeeId,
+            e.type AS type,
+            a.meeting_roll_call AS meetingRollCall,
+            (SELECT name FROM dept WHERE id = a.out_support_dept_id) AS outSupportSection,
+            CASE WHEN a.receive_flag = 1 THEN '是' ELSE '否' END AS isReceive,
+            CASE WHEN a.support_flag = 1 THEN '是' ELSE '否' END AS support,
+            e.esd_submitter AS esdSubmitter
+        FROM employee e
+        LEFT JOIN attendance_daily a ON e.id = a.employee_id 
+            AND a.date = #{date} 
+            AND a.shift = #{shift}
+        WHERE e.dept_id = #{deptId}
+        ORDER BY e.section, e.name
+    </select>
+</mapper>

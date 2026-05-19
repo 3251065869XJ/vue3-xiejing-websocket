@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.attendance.mapper.DeptMapper">
+    <resultMap id="BaseResultMap" type="com.example.attendance.entity.Dept">
+        <id column="id" property="id"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="name" property="name"/>
+        <result column="level" property="level"/>
+        <result column="system_manpower" property="systemManpower"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        select * from dept order by level, id
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        select * from dept where id = #{id}
+    </select>
+
+    <select id="selectByParentId" resultMap="BaseResultMap">
+        select * from dept where parent_id = #{parentId}
+    </select>
+</mapper>
