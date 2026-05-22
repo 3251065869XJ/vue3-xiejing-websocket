@@ -1,12 +1,12 @@
 <template>
   <div class="dashboard-container">
-    <!-- 左侧部门树 -->
+    <!-- 左侧部门树（新结构：label/value/level） -->
     <div class="left-panel">
       <div class="dept-header">部门架构</div>
       <el-tree
         :data="deptTree"
-        :props="treeProps"
-        node-key="id"
+        :props="{ label: 'label', children: 'children' }"
+        node-key="value"
         default-expand-all
         highlight-current
         :expand-on-click-node="false"
@@ -34,17 +34,12 @@
             value-format="YYYY-MM-DD"
             style="width: 160px"
           />
-          <el-select v-model="shiftType" placeholder="班次" style="width: 120px">
-            <el-option label="全部" value="all" />
-            <el-option label="白班" value="day" />
-            <el-option label="夜班" value="night" />
-          </el-select>
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleExport">导出</el-button>
         </div>
       </div>
 
-      <!-- 中间：出勤数据表格（树形结构 + 白班/夜班横向分组） -->
+      <!-- 中间：出勤数据表格（树形结构 + 白夜班横向分组） -->
       <div class="middle-table">
         <el-table
           :data="tableData"
@@ -52,158 +47,92 @@
           :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
           border
           stripe
-          @cell-click="handleCellClick"
         >
-          <el-table-column prop="deptName" label="部门名称" min-width="180" fixed="left" />
+          <el-table-column prop="deptName" label="部门名称" min-width="220" fixed="left">
+            <template #default="{ row }">
+              <span>
+                {{ row.deptName }}
+                <span style="color: #909399; font-size: 12px; margin-left: 8px;">
+                  (总出勤: {{ (row.day_actualAttendance || 0) + (row.night_actualAttendance || 0) }})
+                </span>
+              </span>
+            </template>
+          </el-table-column>
           
           <!-- 白班列组 -->
           <el-table-column label="白班" align="center">
-            <el-table-column prop="day_systemManpower" label="系统人力" min-width="100">
+            <el-table-column prop="day_systemManpower" label="系统人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.day_systemManpower !== undefined && row.day_systemManpower !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'day', 'systemManpower', row.day_systemManpower)"
-                >
-                  {{ row.day_systemManpower }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'day', 'systemManpower', row.day_systemManpower)">
+                  {{ row.day_systemManpower ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="day_requiredManpower" label="应出勤" min-width="100">
+            <el-table-column prop="day_actualAttendance" label="实出勤人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.day_requiredManpower !== undefined && row.day_requiredManpower !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'day', 'requiredManpower', row.day_requiredManpower)"
-                >
-                  {{ row.day_requiredManpower }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'day', 'actualAttendance', row.day_actualAttendance)">
+                  {{ row.day_actualAttendance ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="day_actualAttendance" label="实出勤" min-width="100">
+            <el-table-column prop="day_skillSwipe" label="技能刷卡人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.day_actualAttendance !== undefined && row.day_actualAttendance !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'day', 'actualAttendance', row.day_actualAttendance)"
-                >
-                  {{ row.day_actualAttendance }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'day', 'skillSwipe', row.day_skillSwipe)">
+                  {{ row.day_skillSwipe ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="day_inventoryManpower" label="盘点人力" min-width="100">
+            <el-table-column prop="day_morningMeeting" label="早会点名人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.day_inventoryManpower !== undefined && row.day_inventoryManpower !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'day', 'inventoryManpower', row.day_inventoryManpower)"
-                >
-                  {{ row.day_inventoryManpower }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'day', 'morningMeeting', row.day_morningMeeting)">
+                  {{ row.day_morningMeeting ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="day_receiveCount" label="接收" min-width="90">
+            <el-table-column prop="day_swipeSign" label="刷卡签到人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.day_receiveCount !== undefined && row.day_receiveCount !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'day', 'receiveCount', row.day_receiveCount)"
-                >
-                  {{ row.day_receiveCount }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'day', 'swipeSign', row.day_swipeSign)">
+                  {{ row.day_swipeSign ?? '-' }}
                 </span>
-                <span v-else>-</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="day_supportCount" label="支援" min-width="90">
-              <template #default="{ row }">
-                <span 
-                  v-if="row.day_supportCount !== undefined && row.day_supportCount !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'day', 'supportCount', row.day_supportCount)"
-                >
-                  {{ row.day_supportCount }}
-                </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
           </el-table-column>
 
           <!-- 夜班列组 -->
           <el-table-column label="夜班" align="center">
-            <el-table-column prop="night_systemManpower" label="系统人力" min-width="100">
+            <el-table-column prop="night_systemManpower" label="系统人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.night_systemManpower !== undefined && row.night_systemManpower !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'night', 'systemManpower', row.night_systemManpower)"
-                >
-                  {{ row.night_systemManpower }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'night', 'systemManpower', row.night_systemManpower)">
+                  {{ row.night_systemManpower ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="night_requiredManpower" label="应出勤" min-width="100">
+            <el-table-column prop="night_actualAttendance" label="实出勤人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.night_requiredManpower !== undefined && row.night_requiredManpower !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'night', 'requiredManpower', row.night_requiredManpower)"
-                >
-                  {{ row.night_requiredManpower }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'night', 'actualAttendance', row.night_actualAttendance)">
+                  {{ row.night_actualAttendance ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="night_actualAttendance" label="实出勤" min-width="100">
+            <el-table-column prop="night_skillSwipe" label="技能刷卡人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.night_actualAttendance !== undefined && row.night_actualAttendance !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'night', 'actualAttendance', row.night_actualAttendance)"
-                >
-                  {{ row.night_actualAttendance }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'night', 'skillSwipe', row.night_skillSwipe)">
+                  {{ row.night_skillSwipe ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="night_inventoryManpower" label="盘点人力" min-width="100">
+            <el-table-column prop="night_morningMeeting" label="早会点名人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.night_inventoryManpower !== undefined && row.night_inventoryManpower !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'night', 'inventoryManpower', row.night_inventoryManpower)"
-                >
-                  {{ row.night_inventoryManpower }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'night', 'morningMeeting', row.night_morningMeeting)">
+                  {{ row.night_morningMeeting ?? '-' }}
                 </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="night_receiveCount" label="接收" min-width="90">
+            <el-table-column prop="night_swipeSign" label="刷卡签到人力" min-width="110">
               <template #default="{ row }">
-                <span 
-                  v-if="row.night_receiveCount !== undefined && row.night_receiveCount !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'night', 'receiveCount', row.night_receiveCount)"
-                >
-                  {{ row.night_receiveCount }}
+                <span class="clickable-number" @click.stop="handleNumberClick(row, 'night', 'swipeSign', row.night_swipeSign)">
+                  {{ row.night_swipeSign ?? '-' }}
                 </span>
-                <span v-else>-</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="night_supportCount" label="支援" min-width="90">
-              <template #default="{ row }">
-                <span 
-                  v-if="row.night_supportCount !== undefined && row.night_supportCount !== null"
-                  class="clickable-number" 
-                  @click.stop="handleNumberClick(row, 'night', 'supportCount', row.night_supportCount)"
-                >
-                  {{ row.night_supportCount }}
-                </span>
-                <span v-else>-</span>
               </template>
             </el-table-column>
           </el-table-column>
@@ -218,15 +147,10 @@
           <el-button type="text" @click="closeDetail" style="margin-left: auto;">关闭</el-button>
         </div>
         <el-table :data="detailData" border stripe size="small">
-          <el-table-column prop="section" label="工段" width="100" />
-          <el-table-column prop="name" label="姓名" width="100" />
-          <el-table-column prop="employeeId" label="工号" width="120" />
-          <el-table-column prop="type" label="类型" width="100" />
-          <el-table-column prop="meetingRollCall" label="班会点名" width="110" />
-          <el-table-column prop="outSupportSection" label="外出支援工段" width="140" />
-          <el-table-column prop="isReceive" label="是否接收" width="100" />
-          <el-table-column prop="support" label="支援" width="80" />
-          <el-table-column prop="esdSubmitter" label="ESD状态提交人" width="140" />
+          <!-- 动态列根据明细类型变化 -->
+          <template v-for="col in detailColumns" :key="col.prop">
+            <el-table-column :prop="col.prop" :label="col.label" :width="col.width" />
+          </template>
         </el-table>
       </div>
     </div>
@@ -234,185 +158,299 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Folder, InfoFilled } from '@element-plus/icons-vue'
 // import * as XLSX from 'xlsx'
 
-// ---------- 生成深层部门树（1~5层） ----------
-const generateDeptTree = (prefix = 'dept', level = 1, maxLevel = 5) => {
-  const id = `${prefix}_${level}_${Math.random().toString(36).substr(2, 4)}`
-  const label = `部门${prefix}_L${level}`
-  const node = { id, label }
-  
-  if (level < maxLevel) {
-    const childCount = Math.floor(Math.random() * 3) + 1 // 1-3个子部门
-    node.children = []
-    for (let i = 1; i <= childCount; i++) {
-      node.children.push(generateDeptTree(`${prefix}_${level}_${i}`, level + 1, maxLevel))
-    }
-  }
-  return node
-}
-
-// 构建左侧树：3棵主树，深度随机3~5层
+// ---------- 模拟部门树（label, value, level, children）----------
+// 生产环境返回格式 [{label:'', value:'', level:3, children:[]}]
 const deptTree = ref([
-  generateDeptTree('生产', 1, 4),
-  generateDeptTree('质量', 1, 5),
-  generateDeptTree('供应链', 1, 3)
+  {
+    label: '生产部',
+    value: 'PROD',
+    level: 3,
+    children: [
+      { label: '组装一科', value: 'PROD_ASSY1', level: 4, children: [
+        { label: '组装线A班', value: 'PROD_ASSY1_A', level: 5, children: [] },
+        { label: '组装线B班', value: 'PROD_ASSY1_B', level: 5, children: [] },
+        { label: '组装线C班', value: 'PROD_ASSY1_C', level: 5, children: [] }
+      ]},
+      { label: '组装二科', value: 'PROD_ASSY2', level: 4, children: [
+        { label: '包装线', value: 'PROD_ASSY2_PACK', level: 5, children: [] }
+      ]},
+      { label: '测试科', value: 'PROD_TEST', level: 4, children: [] }
+    ]
+  },
+  {
+    label: '质量部',
+    value: 'QA',
+    level: 3,
+    children: [
+      { label: 'IQC科', value: 'QA_IQC', level: 4, children: [] },
+      { label: 'OQC科', value: 'QA_OQC', level: 4, children: [] }
+    ]
+  },
+  {
+    label: '供应链部',
+    value: 'SCM',
+    level: 3,
+    children: []
+  }
 ])
 
-const treeProps = { children: 'children', label: 'label' }
-
-// 当前选中的部门节点
+// 当前选中的部门节点（包含label, value, level）
 const selectedDept = ref(null)
 
 // 筛选条件
 const dateRange = ref(new Date().toISOString().slice(0,10))
-const shiftType = ref('all') // all, day, night
 
-// 右侧表格数据（树形结构，每个节点含白班/夜班指标，父级自动汇总）
+// 存储从后端获取的原始数据
+const rawData = reactive({
+  empPerPersonMehrList: [],      // 系统人力原始数据
+  manpowerDetailList: [],        // 早会点名原始数据
+  swipeCardSignList: [],         // 刷卡签到原始数据
+  staffScheduleInfoList: []      // 技能刷卡原始数据
+})
+
+// 右侧表格数据（树形结构，包含白夜班汇总）
 const tableData = ref([])
 
 // 明细相关
 const showDetail = ref(false)
 const detailData = ref([])
 const detailTitle = ref('')
+const detailColumns = ref([])
 
-// ---------- 模拟叶子节点数据生成（基于部门id、班次、日期）----------
-const generateLeafMetrics = (deptId, deptName, shift, date) => {
-  // 使用哈希保证同一部门同一天数据稳定
-  const hash = (str) => {
-    let h = 0
-    for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i)
-    return Math.abs(h)
+// ---------- 1. 模拟生成原始数据 ----------
+// 生成员工基础信息（工号、姓名、部门代码层级）
+const generateEmployeeList = () => {
+  const employees = []
+  const namePool = ['张明', '李芳', '王磊', '陈丽', '赵岩', '周强', '吴迪', '郑爽', '孙阳', '林欣', '郭峰', '唐雅']
+  const deptMap = {
+    'PROD_ASSY1_A': { l3: 'PROD', l4: 'PROD_ASSY1', l5: 'PROD_ASSY1_A', orgCode: 'PROD_ASSY1_A', orgName: '组装线A班' },
+    'PROD_ASSY1_B': { l3: 'PROD', l4: 'PROD_ASSY1', l5: 'PROD_ASSY1_B', orgCode: 'PROD_ASSY1_B', orgName: '组装线B班' },
+    'PROD_ASSY2_PACK': { l3: 'PROD', l4: 'PROD_ASSY2', l5: 'PROD_ASSY2_PACK', orgCode: 'PROD_ASSY2_PACK', orgName: '包装线' },
+    'PROD_TEST': { l3: 'PROD', l4: 'PROD_TEST', l5: null, orgCode: 'PROD_TEST', orgName: '测试科' },
+    'QA_IQC': { l3: 'QA', l4: 'QA_IQC', l5: null, orgCode: 'QA_IQC', orgName: 'IQC科' },
+    'QA_OQC': { l3: 'QA', l4: 'QA_OQC', l5: null, orgCode: 'QA_OQC', orgName: 'OQC科' },
+    'SCM': { l3: 'SCM', l4: null, l5: null, orgCode: 'SCM', orgName: '供应链部' }
   }
-  const seed = hash(`${deptId}_${shift}_${date}`) % 100
-  const base = 20 + (seed % 30)
+  for (let i = 1; i <= 45; i++) {
+    const deptKey = Object.keys(deptMap)[i % Object.keys(deptMap).length]
+    const dept = deptMap[deptKey]
+    employees.push({
+      employeeName: namePool[i % namePool.length] + (i + 1),
+      employeeNo: `EMP${String(i+100).slice(1)}`,
+      l3OrgCode: dept.l3,
+      l3OrganizationCn: dept.l3 === 'PROD' ? '生产部' : (dept.l3 === 'QA' ? '质量部' : '供应链部'),
+      l4OrgCode: dept.l4,
+      l4OrganizationCn: dept.l4 ? (dept.l4 === 'PROD_ASSY1' ? '组装一科' : (dept.l4 === 'PROD_ASSY2' ? '组装二科' : (dept.l4 === 'PROD_TEST' ? '测试科' : (dept.l4 === 'QA_IQC' ? 'IQC科' : 'OQC科')))) : null,
+      l5OrgCode: dept.l5,
+      l5OrganizationCn: dept.l5 === 'PROD_ASSY1_A' ? '组装线A班' : (dept.l5 === 'PROD_ASSY1_B' ? '组装线B班' : (dept.l5 === 'PROD_ASSY2_PACK' ? '包装线' : null)),
+      organizationCode: dept.orgCode,
+      organizationNameCn: dept.orgName,
+      lasttimeEsd: Math.random() > 0.3 ? new Date().toISOString() : null, // 随机ESD时间
+      shiftDate: dateRange.value,
+      shiftId: Math.random() > 0.5 ? 1 : 2,
+      shiftNo: Math.random() > 0.5 ? 'DAYA' : 'NIGHT'
+    })
+  }
+  return employees
+}
+
+// 生成早会点名数据（manpowerDetailList）
+const generateManpowerDetailList = (employees) => {
+  return employees.filter(() => Math.random() > 0.5).map(emp => ({
+    ...emp,
+    createBy: ['李主管', '王工', '赵经理', '孙工'][Math.floor(Math.random()*4)]
+  }))
+}
+
+// 生成刷卡签到数据（swipeCardSignList）
+const generateSwipeCardSignList = (employees) => {
+  return employees.filter(() => Math.random() > 0.6).map(emp => ({
+    ...emp,
+    signTime: new Date().toISOString()
+  }))
+}
+
+// 生成技能刷卡数据（staffScheduleInfoList）
+const generateStaffScheduleInfoList = (employees) => {
+  return employees.filter(() => Math.random() > 0.5).map(emp => ({
+    ...emp,
+    loginTime: new Date().toISOString()
+  }))
+}
+
+// 模拟调用后端接口（实际替换为axios）
+const fetchData = async (params) => {
+  // 根据传入的部门层级参数（l3OrgCode/l4OrgCode等）模拟返回对应部门下的数据
+  // 实际上应该由后端根据部门代码过滤，此处我们模拟全量数据再按部门过滤
+  const allEmployees = generateEmployeeList()
+  const filteredEmps = allEmployees.filter(emp => {
+    if (params.l3OrgCode) return emp.l3OrgCode === params.l3OrgCode
+    if (params.l4OrgCode) return emp.l4OrgCode === params.l4OrgCode
+    if (params.l5OrgCode) return emp.l5OrgCode === params.l5OrgCode
+    if (params.organizationCode) return emp.organizationCode === params.organizationCode
+    return true
+  })
   return {
-    systemManpower: base + Math.floor(seed % 15),
-    requiredManpower: base + Math.floor((seed + 7) % 12),
-    actualAttendance: base + Math.floor((seed + 3) % 10),
-    inventoryManpower: base + Math.floor((seed + 11) % 8),
-    receiveCount: Math.floor((seed % 6)),
-    supportCount: Math.floor((seed % 5))
+    empPerPersonMehrList: filteredEmps,
+    manpowerDetailList: generateManpowerDetailList(filteredEmps),
+    swipeCardSignList: generateSwipeCardSignList(filteredEmps),
+    staffScheduleInfoList: generateStaffScheduleInfoList(filteredEmps)
   }
 }
 
-// 递归构建树并自动汇总父节点数值
-// 参数: deptNode - 部门节点, date, shiftFilter, 返回包含children和指标的row对象
-const buildTreeWithSummary = (deptNode, date, shiftFilter) => {
+// 根据当前选中的部门构建请求参数并发起4个请求
+const loadData = async () => {
+  if (!selectedDept.value) return
+  const dept = selectedDept.value
+  const date = dateRange.value
+  let params = { shiftDate: date }
+  // 根据部门层级构造对应字段
+  if (dept.level === 3) params.l3OrgCode = dept.value
+  else if (dept.level === 4) params.l4OrgCode = dept.value
+  else if (dept.level === 5) params.l5OrgCode = dept.value
+  else params.organizationCode = dept.value  // 最小部门
+
+  // 模拟同时请求4个接口（实际使用Promise.all + axios）
+  // 这里模拟后端返回的数据结构
+  const mockResult = await fetchData(params)
+  rawData.empPerPersonMehrList = mockResult.empPerPersonMehrList
+  rawData.manpowerDetailList = mockResult.manpowerDetailList
+  rawData.swipeCardSignList = mockResult.swipeCardSignList
+  rawData.staffScheduleInfoList = mockResult.staffScheduleInfoList
+}
+
+// ---------- 2. 数据计算与树形汇总 ----------
+// 获取某个部门下所有子孙部门节点的value列表（递归）
+const getAllDescendantValues = (deptNode) => {
+  let values = [deptNode.value]
+  if (deptNode.children && deptNode.children.length) {
+    deptNode.children.forEach(child => {
+      values = values.concat(getAllDescendantValues(child))
+    })
+  }
+  return values
+}
+
+// 根据部门代码匹配规则判断员工是否属于该部门（支持l3/l4/l5/orgCode）
+const isEmployeeBelongToDept = (emp, deptValue, deptLevel) => {
+  if (deptLevel === 3) return emp.l3OrgCode === deptValue
+  if (deptLevel === 4) return emp.l4OrgCode === deptValue
+  if (deptLevel === 5) return emp.l5OrgCode === deptValue
+  return emp.organizationCode === deptValue
+}
+
+// 计算指定部门（及其子孙）的汇总指标（白班/夜班）
+const computeDeptMetrics = (deptNode, shiftId) => {
+  // 获取当前部门及其所有子孙部门的value列表
+  const descendantValues = getAllDescendantValues(deptNode)
+  // 根据shiftId过滤班次（1白班2夜班）
+  const shift = shiftId === 1 ? 'day' : 'night'
+  
+  // 1. 系统人力：empPerPersonMehrList中符合部门和班次的员工数量
+  const systemEmpList = rawData.empPerPersonMehrList.filter(emp => 
+    descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+    descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)
+  ).filter(emp => emp.shiftId === shiftId)
+  const systemManpower = systemEmpList.length
+
+  // 2. 实出勤人力：四个列表去重（工号）且符合部门和班次
+  const actualSet = new Set()
+  // empPerPersonMehrList中lasttimeEsd不为空
+  rawData.empPerPersonMehrList.filter(emp => emp.lasttimeEsd).forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) actualSet.add(emp.employeeNo)
+  })
+  rawData.manpowerDetailList.forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) actualSet.add(emp.employeeNo)
+  })
+  rawData.swipeCardSignList.forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) actualSet.add(emp.employeeNo)
+  })
+  rawData.staffScheduleInfoList.forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) actualSet.add(emp.employeeNo)
+  })
+  const actualAttendance = actualSet.size
+
+  // 3. 技能刷卡人力：staffScheduleInfoList去重工号
+  const skillSet = new Set()
+  rawData.staffScheduleInfoList.forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) skillSet.add(emp.employeeNo)
+  })
+  const skillSwipe = skillSet.size
+
+  // 4. 早会点名人力：manpowerDetailList去重工号
+  const meetingSet = new Set()
+  rawData.manpowerDetailList.forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) meetingSet.add(emp.employeeNo)
+  })
+  const morningMeeting = meetingSet.size
+
+  // 5. 刷卡签到人力：swipeCardSignList去重工号
+  const signSet = new Set()
+  rawData.swipeCardSignList.forEach(emp => {
+    if ((descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) || 
+         descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) &&
+        emp.shiftId === shiftId) signSet.add(emp.employeeNo)
+  })
+  const swipeSign = signSet.size
+
+  return { systemManpower, actualAttendance, skillSwipe, morningMeeting, swipeSign }
+}
+
+// 递归构建右侧树形表格数据（从选中节点开始，包含自身及所有子孙）
+const buildTableTree = (deptNode) => {
   if (!deptNode) return null
   
-  const deptId = deptNode.id
-  const deptName = deptNode.label
+  // 计算白班指标（shiftId=1）和夜班指标（shiftId=2）
+  const dayMetrics = computeDeptMetrics(deptNode, 1)
+  const nightMetrics = computeDeptMetrics(deptNode, 2)
   
-  // 先递归构建子节点
-  let children = []
-  if (deptNode.children && deptNode.children.length) {
-    children = deptNode.children
-      .map(child => buildTreeWithSummary(child, date, shiftFilter))
-      .filter(child => child !== null)
-  }
-  
-  // 判断是否为叶子节点（无子节点）
-  const isLeaf = children.length === 0
-  
-  // 初始化当前节点的指标（白班和夜班）
-  let dayMetrics = null
-  let nightMetrics = null
-  
-  if (isLeaf) {
-    // 叶子节点：根据班次筛选生成原始数据
-    if (shiftFilter === 'all' || shiftFilter === 'day') {
-      dayMetrics = generateLeafMetrics(deptId, deptName, 'day', date)
-    }
-    if (shiftFilter === 'all' || shiftFilter === 'night') {
-      nightMetrics = generateLeafMetrics(deptId, deptName, 'night', date)
-    }
-  } else {
-    // 非叶子节点：汇总所有子节点的对应班次指标
-    // 白班汇总
-    if (shiftFilter === 'all' || shiftFilter === 'day') {
-      dayMetrics = {
-        systemManpower: 0,
-        requiredManpower: 0,
-        actualAttendance: 0,
-        inventoryManpower: 0,
-        receiveCount: 0,
-        supportCount: 0
-      }
-      children.forEach(child => {
-        if (child.day_systemManpower !== undefined && child.day_systemManpower !== null) {
-          dayMetrics.systemManpower += child.day_systemManpower
-          dayMetrics.requiredManpower += child.day_requiredManpower
-          dayMetrics.actualAttendance += child.day_actualAttendance
-          dayMetrics.inventoryManpower += child.day_inventoryManpower
-          dayMetrics.receiveCount += child.day_receiveCount
-          dayMetrics.supportCount += child.day_supportCount
-        }
-      })
-      // 如果所有子节点都没有白班数据，则设为null
-      if (children.every(c => c.day_systemManpower === undefined || c.day_systemManpower === null)) {
-        dayMetrics = null
-      }
-    }
-    // 夜班汇总
-    if (shiftFilter === 'all' || shiftFilter === 'night') {
-      nightMetrics = {
-        systemManpower: 0,
-        requiredManpower: 0,
-        actualAttendance: 0,
-        inventoryManpower: 0,
-        receiveCount: 0,
-        supportCount: 0
-      }
-      children.forEach(child => {
-        if (child.night_systemManpower !== undefined && child.night_systemManpower !== null) {
-          nightMetrics.systemManpower += child.night_systemManpower
-          nightMetrics.requiredManpower += child.night_requiredManpower
-          nightMetrics.actualAttendance += child.night_actualAttendance
-          nightMetrics.inventoryManpower += child.night_inventoryManpower
-          nightMetrics.receiveCount += child.night_receiveCount
-          nightMetrics.supportCount += child.night_supportCount
-        }
-      })
-      if (children.every(c => c.night_systemManpower === undefined || c.night_systemManpower === null)) {
-        nightMetrics = null
-      }
-    }
-  }
-  
-  // 构建当前行对象
   const row = {
-    id: deptId,
-    deptName: deptName,
-    day_systemManpower: dayMetrics?.systemManpower ?? null,
-    day_requiredManpower: dayMetrics?.requiredManpower ?? null,
-    day_actualAttendance: dayMetrics?.actualAttendance ?? null,
-    day_inventoryManpower: dayMetrics?.inventoryManpower ?? null,
-    day_receiveCount: dayMetrics?.receiveCount ?? null,
-    day_supportCount: dayMetrics?.supportCount ?? null,
-    night_systemManpower: nightMetrics?.systemManpower ?? null,
-    night_requiredManpower: nightMetrics?.requiredManpower ?? null,
-    night_actualAttendance: nightMetrics?.actualAttendance ?? null,
-    night_inventoryManpower: nightMetrics?.inventoryManpower ?? null,
-    night_receiveCount: nightMetrics?.receiveCount ?? null,
-    night_supportCount: nightMetrics?.supportCount ?? null,
-    children: children
+    id: deptNode.value,
+    deptName: deptNode.label,
+    day_systemManpower: dayMetrics.systemManpower,
+    day_actualAttendance: dayMetrics.actualAttendance,
+    day_skillSwipe: dayMetrics.skillSwipe,
+    day_morningMeeting: dayMetrics.morningMeeting,
+    day_swipeSign: dayMetrics.swipeSign,
+    night_systemManpower: nightMetrics.systemManpower,
+    night_actualAttendance: nightMetrics.actualAttendance,
+    night_skillSwipe: nightMetrics.skillSwipe,
+    night_morningMeeting: nightMetrics.morningMeeting,
+    night_swipeSign: nightMetrics.swipeSign,
+    children: []
   }
   
-  // 如果当前节点是汇总节点且所有汇总值为0，可视情况保留（可能没有子节点数据，但一般会有）
+  if (deptNode.children && deptNode.children.length) {
+    row.children = deptNode.children.map(child => buildTableTree(child)).filter(c => c !== null)
+  }
   return row
 }
 
-// 刷新右侧表格（根据选中的部门节点构建树）
-const refreshTableData = () => {
+// 刷新右侧表格（点击部门时调用）
+const refreshTableData = async () => {
   if (!selectedDept.value) {
     tableData.value = []
     return
   }
-  const treeRoot = buildTreeWithSummary(selectedDept.value, dateRange.value, shiftType.value)
+  await loadData()  // 重新拉取原始数据
+  const treeRoot = buildTableTree(selectedDept.value)
   if (treeRoot) {
     tableData.value = [treeRoot]
   } else {
@@ -420,38 +458,260 @@ const refreshTableData = () => {
   }
 }
 
-// 左侧部门树点击
+// 左侧部门点击事件
 const handleDeptChange = (data) => {
   selectedDept.value = data
   refreshTableData()
   closeDetail()
 }
 
-// 查询
-const handleQuery = () => {
-  refreshTableData()
+// 查询按钮（重新查询）
+const handleQuery = async () => {
+  await refreshTableData()
   ElMessage.success('查询完成')
 }
 
-// 导出表格（扁平化）
+// ---------- 明细相关：根据点击的类型和部门节点生成明细列表 ----------
+// 获取部门下所有员工（根据部门层级匹配）
+const getAllEmployeesInDept = (deptNode, shiftId, type) => {
+  const descendantValues = getAllDescendantValues(deptNode)
+  let employeeSet = new Map() // key: employeeNo, value: 完整员工对象
+
+  const addEmp = (emp) => {
+    if (!employeeSet.has(emp.employeeNo) && emp.shiftId === shiftId) {
+      employeeSet.set(emp.employeeNo, emp)
+    }
+  }
+
+  if (type === 'systemManpower') {
+    rawData.empPerPersonMehrList.forEach(emp => {
+      if (descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) ||
+          descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)) {
+        addEmp(emp)
+      }
+    })
+  } else if (type === 'actualAttendance') {
+    // 实出勤：所有四个列表中出现的员工
+    rawData.empPerPersonMehrList.filter(emp => emp.lasttimeEsd).forEach(addEmp)
+    rawData.manpowerDetailList.forEach(addEmp)
+    rawData.swipeCardSignList.forEach(addEmp)
+    rawData.staffScheduleInfoList.forEach(addEmp)
+  } else if (type === 'skillSwipe') {
+    rawData.staffScheduleInfoList.forEach(addEmp)
+  } else if (type === 'morningMeeting') {
+    rawData.manpowerDetailList.forEach(addEmp)
+  } else if (type === 'swipeSign') {
+    rawData.swipeCardSignList.forEach(addEmp)
+  }
+  
+  // 再按部门过滤一次
+  const filtered = Array.from(employeeSet.values()).filter(emp => 
+    descendantValues.includes(emp.l3OrgCode) || descendantValues.includes(emp.l4OrgCode) ||
+    descendantValues.includes(emp.l5OrgCode) || descendantValues.includes(emp.organizationCode)
+  )
+  return filtered
+}
+
+// 生成明细数据
+const generateDetailData = (deptNode, shift, metricType) => {
+  const shiftId = shift === 'day' ? 1 : 2
+  const employees = getAllEmployeesInDept(deptNode, shiftId, metricType)
+  
+  // 根据指标类型定义不同的列
+  let columns = []
+  let dataRows = []
+  
+  if (metricType === 'systemManpower') {
+    columns = [
+      { prop: 'l3OrganizationCn', label: '三层部门名称', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门名称', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门名称', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门名称', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 }
+    ]
+    dataRows = employees.map(emp => ({
+      l3OrganizationCn: emp.l3OrganizationCn,
+      l4OrganizationCn: emp.l4OrganizationCn,
+      l5OrganizationCn: emp.l5OrganizationCn,
+      organizationNameCn: emp.organizationNameCn,
+      employeeName: emp.employeeName,
+      employeeNo: emp.employeeNo
+    }))
+  } 
+  else if (metricType === 'actualAttendance') {
+    columns = [
+      { prop: 'l3OrganizationCn', label: '三层部门名称', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门名称', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门名称', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门名称', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'esdStatus', label: 'ESD状态', width: 100 },
+      { prop: 'meetingRollCall', label: '班会点名', width: 100 },
+      { prop: 'skillSwipe', label: '技能刷卡', width: 100 },
+      { prop: 'swipeSign', label: '刷卡签到', width: 100 },
+      { prop: 'submitter', label: '提交人', width: 100 }
+    ]
+    // 构建每个员工的补充信息
+    dataRows = employees.map(emp => {
+      // 查找早会点名数据
+      const meetingRec = rawData.manpowerDetailList.find(m => m.employeeNo === emp.employeeNo)
+      // 查找刷卡签到
+      const signRec = rawData.swipeCardSignList.find(s => s.employeeNo === emp.employeeNo)
+      // 查找技能刷卡
+      const skillRec = rawData.staffScheduleInfoList.find(s => s.employeeNo === emp.employeeNo)
+      // ESD状态：lasttimeEsd不为空则为“已测”
+      const esdStatus = emp.lasttimeEsd ? '已测' : '未测'
+      const meetingRollCall = meetingRec ? '已点名' : '未点名'
+      const skillSwipe = skillRec ? '已刷卡' : '未刷卡'
+      const swipeSign = signRec ? '已签到' : '未签到'
+      const submitter = meetingRec ? meetingRec.createBy : ''
+      return {
+        l3OrganizationCn: emp.l3OrganizationCn,
+        l4OrganizationCn: emp.l4OrganizationCn,
+        l5OrganizationCn: emp.l5OrganizationCn,
+        organizationNameCn: emp.organizationNameCn,
+        employeeName: emp.employeeName,
+        employeeNo: emp.employeeNo,
+        esdStatus,
+        meetingRollCall,
+        skillSwipe,
+        swipeSign,
+        submitter
+      }
+    })
+  }
+  else if (metricType === 'skillSwipe') {
+    columns = [
+      { prop: 'l3OrganizationCn', label: '三层部门名称', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门名称', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门名称', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门名称', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'loginTime', label: '刷卡时间', width: 160 }
+    ]
+    dataRows = employees.map(emp => {
+      const skillRec = rawData.staffScheduleInfoList.find(s => s.employeeNo === emp.employeeNo)
+      return {
+        l3OrganizationCn: emp.l3OrganizationCn,
+        l4OrganizationCn: emp.l4OrganizationCn,
+        l5OrganizationCn: emp.l5OrganizationCn,
+        organizationNameCn: emp.organizationNameCn,
+        employeeName: emp.employeeName,
+        employeeNo: emp.employeeNo,
+        loginTime: skillRec ? skillRec.loginTime : ''
+      }
+    })
+  }
+  else if (metricType === 'morningMeeting') {
+    columns = [
+      { prop: 'l3OrganizationCn', label: '三层部门名称', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门名称', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门名称', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门名称', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'submitter', label: '提交人', width: 100 }
+    ]
+    dataRows = employees.map(emp => {
+      const meetingRec = rawData.manpowerDetailList.find(m => m.employeeNo === emp.employeeNo)
+      return {
+        l3OrganizationCn: emp.l3OrganizationCn,
+        l4OrganizationCn: emp.l4OrganizationCn,
+        l5OrganizationCn: emp.l5OrganizationCn,
+        organizationNameCn: emp.organizationNameCn,
+        employeeName: emp.employeeName,
+        employeeNo: emp.employeeNo,
+        submitter: meetingRec ? meetingRec.createBy : ''
+      }
+    })
+  }
+  else if (metricType === 'swipeSign') {
+    columns = [
+      { prop: 'l3OrganizationCn', label: '三层部门名称', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门名称', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门名称', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门名称', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'signTime', label: '签到时间', width: 160 }
+    ]
+    dataRows = employees.map(emp => {
+      const signRec = rawData.swipeCardSignList.find(s => s.employeeNo === emp.employeeNo)
+      return {
+        l3OrganizationCn: emp.l3OrganizationCn,
+        l4OrganizationCn: emp.l4OrganizationCn,
+        l5OrganizationCn: emp.l5OrganizationCn,
+        organizationNameCn: emp.organizationNameCn,
+        employeeName: emp.employeeName,
+        employeeNo: emp.employeeNo,
+        signTime: signRec ? signRec.signTime : ''
+      }
+    })
+  }
+  
+  return { columns, dataRows }
+}
+
+// 点击表格数字显示明细
+const handleNumberClick = (row, shift, metricType, value) => {
+  // 查找当前行对应的原始部门节点（根据row.id在deptTree中查找）
+  const findDeptNode = (nodes, id) => {
+    for (let node of nodes) {
+      if (node.value === id) return node
+      if (node.children) {
+        const found = findDeptNode(node.children, id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  const deptNode = findDeptNode(deptTree.value, row.id)
+  if (!deptNode) return
+  
+  const shiftText = shift === 'day' ? '白班' : '夜班'
+  const metricMap = {
+    systemManpower: '系统人力',
+    actualAttendance: '实出勤人力',
+    skillSwipe: '技能刷卡人力',
+    morningMeeting: '早会点名人力',
+    swipeSign: '刷卡签到人力'
+  }
+  const title = `${row.deptName} (${shiftText}) · ${metricMap[metricType]}: ${value}`
+  
+  const { columns, dataRows } = generateDetailData(deptNode, shift, metricType)
+  detailColumns.value = columns
+  detailData.value = dataRows
+  detailTitle.value = title
+  showDetail.value = true
+}
+
+// 关闭明细
+const closeDetail = () => {
+  showDetail.value = false
+  detailData.value = []
+  detailColumns.value = []
+  detailTitle.value = ''
+}
+
+// 导出表格（扁平化树）
 const flattenTree = (rows, result = []) => {
   rows.forEach(row => {
-    const flatRow = {
+    result.push({
       '部门名称': row.deptName,
       '白班-系统人力': row.day_systemManpower ?? '',
-      '白班-应出勤': row.day_requiredManpower ?? '',
-      '白班-实出勤': row.day_actualAttendance ?? '',
-      '白班-盘点人力': row.day_inventoryManpower ?? '',
-      '白班-接收': row.day_receiveCount ?? '',
-      '白班-支援': row.day_supportCount ?? '',
+      '白班-实出勤人力': row.day_actualAttendance ?? '',
+      '白班-技能刷卡人力': row.day_skillSwipe ?? '',
+      '白班-早会点名人力': row.day_morningMeeting ?? '',
+      '白班-刷卡签到人力': row.day_swipeSign ?? '',
       '夜班-系统人力': row.night_systemManpower ?? '',
-      '夜班-应出勤': row.night_requiredManpower ?? '',
-      '夜班-实出勤': row.night_actualAttendance ?? '',
-      '夜班-盘点人力': row.night_inventoryManpower ?? '',
-      '夜班-接收': row.night_receiveCount ?? '',
-      '夜班-支援': row.night_supportCount ?? ''
-    }
-    result.push(flatRow)
+      '夜班-实出勤人力': row.night_actualAttendance ?? '',
+      '夜班-技能刷卡人力': row.night_skillSwipe ?? '',
+      '夜班-早会点名人力': row.night_morningMeeting ?? '',
+      '夜班-刷卡签到人力': row.night_swipeSign ?? ''
+    })
     if (row.children && row.children.length) {
       flattenTree(row.children, result)
     }
@@ -472,93 +732,11 @@ const handleExport = () => {
   ElMessage.success('导出成功')
 }
 
-// ---------- 明细数据模拟（根据部门节点、班次、指标类型生成）----------
-// 递归获取部门下所有叶子节点名称（用于明细条数参考）
-const collectLeafDeptNames = (row, names = []) => {
-  if (!row.children || row.children.length === 0) {
-    names.push(row.deptName)
-  } else {
-    row.children.forEach(child => collectLeafDeptNames(child, names))
-  }
-  return names
-}
-
-const generateDetailDataForNode = (row, shift, metricKey, metricValue) => {
-  // 获取该部门下所有叶子部门名称（用于模拟明细数据）
-  const leafNames = collectLeafDeptNames(row, [])
-  const deptCount = Math.max(1, leafNames.length)
-  // 根据部门规模决定明细条目数
-  const itemCount = Math.min(10, 3 + deptCount * 2)
-  
-  const shiftText = shift === 'day' ? '白班' : '夜班'
-  const metricMap = {
-    systemManpower: '系统人力',
-    requiredManpower: '应出勤',
-    actualAttendance: '实出勤',
-    inventoryManpower: '盘点人力',
-    receiveCount: '接收',
-    supportCount: '支援'
-  }
-  const metricName = metricMap[metricKey]
-  
-  // 模拟人员池
-  const namePool = ['张明', '李芳', '王磊', '陈丽', '赵岩', '周强', '吴迪', '郑爽', '孙阳', '林欣']
-  const sectionPool = ['组装线', '测试段', '包装段', 'IQC', 'OQC', '仓储科', '物流科']
-  const typePool = ['正式工', '派遣工', '临时工', '实习生']
-  const rollCallPool = ['已点名', '未点名']
-  const receivePool = ['是', '否']
-  const supportPool = ['是', '否']
-  const esdPool = ['李主管', '王工', '赵经理', '孙工', '周主管', '陈主任']
-  
-  const details = []
-  for (let i = 0; i < itemCount; i++) {
-    details.push({
-      section: sectionPool[i % sectionPool.length],
-      name: namePool[i % namePool.length] + (i + 1),
-      employeeId: `100${String(i + 1).padStart(3, '0')}`,
-      type: typePool[i % typePool.length],
-      meetingRollCall: rollCallPool[i % rollCallPool.length],
-      outSupportSection: i % 3 === 0 ? '支援科' : '-',
-      isReceive: receivePool[i % receivePool.length],
-      support: supportPool[i % supportPool.length],
-      esdSubmitter: esdPool[i % esdPool.length]
-    })
-  }
-  return details
-}
-
-// 点击数字显示明细
-const handleNumberClick = (row, shift, metricKey, value) => {
-  const shiftText = shift === 'day' ? '白班' : '夜班'
-  const metricMap = {
-    systemManpower: '系统人力',
-    requiredManpower: '应出勤',
-    actualAttendance: '实出勤',
-    inventoryManpower: '盘点人力',
-    receiveCount: '接收',
-    supportCount: '支援'
-  }
-  const metricName = metricMap[metricKey]
-  const title = `${row.deptName} (${shiftText}) · ${metricName}: ${value}`
-  
-  const details = generateDetailDataForNode(row, shift, metricKey, value)
-  detailData.value = details
-  detailTitle.value = title
-  showDetail.value = true
-}
-
-const handleCellClick = () => {}
-const closeDetail = () => {
-  showDetail.value = false
-  detailData.value = []
-  detailTitle.value = ''
-}
-
-// 初始化选中第一个部门
-onMounted(() => {
+// 初始化默认选中第一个部门
+onMounted(async () => {
   if (deptTree.value.length > 0) {
     selectedDept.value = deptTree.value[0]
-    refreshTableData()
+    await refreshTableData()
   }
 })
 </script>
@@ -675,3 +853,4 @@ onMounted(() => {
   border-radius: 3px;
 }
 </style>
+```

@@ -1,0 +1,75 @@
+empPerPersonMehrList:[{
+employeeName:”"，
+employeeNo:"",
+l3OrgCode:"",
+l3OrganizationCn:“”，
+l4OrgCo"de:"",
+l4Organiza"tionCn":""，
+l5OrgCode": null,
+15OrganizationCn: null,
+lasttimeEsd:"”,
+organizationCode:"",
+organizationNameCn:“”，
+shiftDate:"",
+shiftld: 1,
+shiftNo:"DAYA"
+}]；
+manpowerDetailList:[{
+employeeName:”"，
+employeeNo:"",
+l3OrgCode:"",
+l3OrganizationCn:“”，
+l4OrgCo"de:"",
+l4Organiza"tionCn":""，
+l5OrgCode": null,
+15OrganizationCn: null,
+lasttimeEsd:"”,
+organizationCode:"",
+organizationNameCn:“”，
+shiftDate:"",
+shiftld: 1,
+shiftNo:"DAYA",
+createBy:''
+}]；
+swipeCardSignList:[{
+employeeName:”"，
+employeeNo:"",
+l3OrgCode:"",
+l3OrganizationCn:“”，
+l4OrgCo"de:"",
+l4Organiza"tionCn":""，
+l5OrgCode": null,
+15OrganizationCn: null,
+lasttimeEsd:"”,
+organizationCode:"",
+organizationNameCn:“”，
+shiftDate:"",
+shiftld: 1,
+shiftNo:"DAYA",
+signTime:''
+}]；
+staffScheduleInfoList:[{
+employeeName:”"，
+employeeNo:"",
+l3OrgCode:"",
+l3OrganizationCn:“”，
+l4OrgCo"de:"",
+l4Organiza"tionCn":""，
+l5OrgCode": null,
+15OrganizationCn: null,
+lasttimeEsd:"”,
+organizationCode:"",
+organizationNameCn:“”，
+shiftDate:"",
+shiftld: 1,
+shiftNo:"DAYA",
+loginTime:''
+}]；
+
+继续优化前端页面的逻辑，优化点如下：1、我的正式生产环境的deptTree的结构为[{label:'',value:'',level:3}]，label是部门名称，value是部门代码，level是部门层级；middle-table里的表格也要按这种数据结构进行渲染；2、middle-table的白夜班列里只需要显示出系统人力，实出勤人力，技能刷卡人力，早会点名人力，刷卡签到人力；3、当我点击左侧的部门选项时，会得到当前选中的部门对象{label:'',value:'',level:3}，如果部门层级level为3，则构造一个请求参数{l3OrgCode:value,shiftDate:dateRange.value}，如果部门层级为4则为{l4OrgCode:value,shiftDate:dateRange.value}以此类推；参数构建好之后同时请求4个接口，分别使用封装好的axios调用后端请求查询系统人力、技能刷卡人力、早会点名人力、刷卡签到人力；4、l3OrgCode是3层部门代码，l4OrgCode是4层部门代码、以此类推，organizationCode是最小部门代码；shiftld是班次，1为白班，2为晚班5、获取到对应的数据之后开始进行计算，第一步先根据empPerPersonMehrList里的值计算实出当前的系统人力，并且将表格里显示的系统人力数量和当点击系统人力数量时的明细数据都计算出来，根据表格里渲染的部门层级和empPerPersonMehrList里的部门层级作比对求和（bottom-detail明细数据表格列为：三层部门名称、四层部门名称、五层部门名称、最小部门名称，姓名、工号）；
+第二步计算实出勤人力：empPerPersonMehrList里lasttimeEsd的值不为空则是出勤人力，manpowerDetailList（早会点名数据）、swipeCardSignList（刷卡签到数据）、staffScheduleInfoList（技能刷卡数据）里的所有数据都是出勤人力，但是一个人可能会在这三组数据里都出现，只能以工号为维度算一个出勤人力，然后将计算好的出勤人力显示到对应的表格列里，并且将点击出勤人力时的明细数据都计算出来，根据表格里渲染的部门层级和empPerPersonMehrList、manpowerDetailList、swipeCardSignList、staffScheduleInfoList里的部门层级作比对求和（bottom-detail明细数据表格列为：三层部门名称、四层部门名称、五层部门名称、最小部门名称，姓名、工号，ESD状态、班会点名、技能刷卡、刷卡签到，提交人），如果员工有早会点名数据，则提交人的值为manpowerDetailList里对应的createBy；
+第三步计算出技能刷卡人力，根据表格里渲染的部门层级和staffScheduleInfoList里的部门层级作比对求和（bottom-detail明细数据表格列为：三层部门名称、四层部门名称、五层部门名称、最小部门名称，姓名、工号，刷卡时间(loginTime的值)）；
+第四步计算出早会点名人力，根据表格里渲染的部门层级和manpowerDetailList里的部门层级作比对求和（bottom-detail明细数据表格列为：三层部门名称、四层部门名称、五层部门名称、最小部门名称，姓名、工号，提交人(createBy的值)）；
+第四步计算出刷卡签到人力，根据表格里渲染的部门层级和swipeCardSignList里的部门层级作比对求和（bottom-detail明细数据表格列为：三层部门名称、四层部门名称、五层部门名称、最小部门名称，姓名、工号，签到时间(signTime的值)）；
+
+请模拟生成empPerPersonMehrList、manpowerDetailList、swipeCardSignList、staffScheduleInfoList的数据完成我的要求
