@@ -476,33 +476,78 @@ const getAllEmployeesInDept = (deptNode, shiftId, type) => {
   return Array.from(employeeMap.values())
 }
 
-// 生成明细数据
+/**
+ * 生成明细数据（支持班次合并）
+ * @param {Object} deptNode - 当前部门节点
+ * @param {string} shift - 'day', 'night', 或 'total'
+ * @param {string} metricType - 指标类型
+ */
 const generateDetailData = (deptNode, shift, metricType) => {
-  const shiftId = shift === 'day' ? 1 : 2
-  let columns = []
-  let dataRows = []
-  
+  const isTotal = shift === 'total';
+  const shiftsToProcess = isTotal ? ['day', 'night'] : [shift];
+  let allRows = [];
+
+  // 基础人力指标（需要从员工数据中获取）
+  const basicMetrics = ['systemManpower', 'actualAttendance', 'skillSwipe', 'morningMeeting', 'swipeSign'];
+  // 支援/请假指标（从 leaveList 获取）
+  const supportMetrics = ['leaveManpower', 'receiveSupport', 'outSupport'];
+
+  if (basicMetrics.includes(metricType)) {
+    for (const s of shiftsToProcess) {
+      const shiftId = s === 'day' ? 1 : 2;
+      const employees = getAllEmployeesInDept(deptNode, shiftId, metricType);
+      employees.forEach(emp => {
+        allRows.push({
+          ...emp,
+          _shiftText: s === 'day' ? '白班' : '夜班'
+        });
+      });
+    }
+  } else if (supportMetrics.includes(metricType)) {
+    for (const s of shiftsToProcess) {
+      const shiftId = s === 'day' ? 1 : 2;
+      let records = [];
+      if (metricType === 'leaveManpower') {
+        records = getLeaveRecordsByDeptAndShift(deptNode, shiftId, 'leave');
+      } else if (metricType === 'receiveSupport') {
+        records = getLeaveRecordsByDeptAndShift(deptNode, shiftId, 'receive');
+      } else if (metricType === 'outSupport') {
+        records = getLeaveRecordsByDeptAndShift(deptNode, shiftId, 'out');
+      }
+      records = records.map(rec => ({ ...rec, _shiftText: s === 'day' ? '白班' : '夜班' }));
+      allRows.push(...records);
+    }
+  } else {
+    return { columns: [], dataRows: [] };
+  }
+
+  // 根据 metricType 构建列定义和数据行
+  let columns = [];
+  let dataRows = [];
+
   if (metricType === 'systemManpower') {
-    const employees = getAllEmployeesInDept(deptNode, shiftId, 'systemManpower')
     columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
       { prop: 'l3OrganizationCn', label: '三层部门', width: 120 },
       { prop: 'l4OrganizationCn', label: '四层部门', width: 120 },
       { prop: 'l5OrganizationCn', label: '五层部门', width: 120 },
       { prop: 'organizationNameCn', label: '最小部门', width: 130 },
       { prop: 'employeeName', label: '姓名', width: 80 },
       { prop: 'employeeNo', label: '工号', width: 100 }
-    ]
-    dataRows = employees.map(emp => ({
-      l3OrganizationCn: emp.l3OrganizationCn,
-      l4OrganizationCn: emp.l4OrganizationCn,
-      l5OrganizationCn: emp.l5OrganizationCn,
-      organizationNameCn: emp.organizationNameCn,
-      employeeName: emp.employeeName,
-      employeeNo: emp.employeeNo
-    }))
-  } else if (metricType === 'actualAttendance') {
-    const employees = getAllEmployeesInDept(deptNode, shiftId, 'actualAttendance')
+    ];
+    dataRows = allRows.map(row => ({
+      _shiftText: row._shiftText,
+      l3OrganizationCn: row.l3OrganizationCn,
+      l4OrganizationCn: row.l4OrganizationCn,
+      l5OrganizationCn: row.l5OrganizationCn,
+      organizationNameCn: row.organizationNameCn,
+      employeeName: row.employeeName,
+      employeeNo: row.employeeNo
+    }));
+  } 
+  else if (metricType === 'actualAttendance') {
     columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
       { prop: 'l3OrganizationCn', label: '三层部门', width: 120 },
       { prop: 'l4OrganizationCn', label: '四层部门', width: 120 },
       { prop: 'l5OrganizationCn', label: '五层部门', width: 120 },
@@ -510,105 +555,181 @@ const generateDetailData = (deptNode, shift, metricType) => {
       { prop: 'employeeName', label: '姓名', width: 80 },
       { prop: 'employeeNo', label: '工号', width: 100 },
       { prop: 'esdStatus', label: 'ESD状态', width: 100 }
-    ]
+    ];
     if (queryType.value === 'all' || queryType.value === 'morningMeeting') {
-      columns.push({ prop: 'meetingStatus', label: '班会点名', width: 120 })
-      columns.push({ prop: 'meetingTime', label: '点名时间', width: 160 })
+      columns.push({ prop: 'meetingStatus', label: '班会点名', width: 120 });
+      columns.push({ prop: 'meetingTime', label: '点名时间', width: 160 });
     }
     if (queryType.value === 'all' || queryType.value === 'swipeSign') {
-      columns.push({ prop: 'signStatus', label: '刷卡签到', width: 120 })
-      columns.push({ prop: 'signTime', label: '签到时间', width: 160 })
+      columns.push({ prop: 'signStatus', label: '刷卡签到', width: 120 });
+      columns.push({ prop: 'signTime', label: '签到时间', width: 160 });
     }
     if (queryType.value === 'all' || queryType.value === 'skillSwipe') {
-      columns.push({ prop: 'skillStatus', label: '技能刷卡', width: 120 })
-      columns.push({ prop: 'skillTime', label: '刷卡时间', width: 160 })
+      columns.push({ prop: 'skillStatus', label: '技能刷卡', width: 120 });
+      columns.push({ prop: 'skillTime', label: '刷卡时间', width: 160 });
     }
     if (queryType.value === 'all' || queryType.value === 'morningMeeting') {
-      columns.push({ prop: 'submitter', label: '提交人', width: 100 })
+      columns.push({ prop: 'submitter', label: '提交人', width: 100 });
     }
-    dataRows = employees.map(emp => {
-      const meetingRec = rawData.manpowerDetailList.find(m => m.employeeNo === emp.employeeNo && m.shiftId === shiftId)
-      const signRec = rawData.swipeCardSignList.find(s => s.employeeNo === emp.employeeNo && s.shiftId === shiftId)
-      const skillRec = rawData.staffScheduleInfoList.find(s => s.employeeNo === emp.employeeNo && s.shiftId === shiftId && s.status === '已刷卡')
-      const esdStatus = emp.lasttimeEsd ? '已测' : '未测'
-      const row = {
-        l3OrganizationCn: emp.l3OrganizationCn,
-        l4OrganizationCn: emp.l4OrganizationCn,
-        l5OrganizationCn: emp.l5OrganizationCn,
-        organizationNameCn: emp.organizationNameCn,
-        employeeName: emp.employeeName,
-        employeeNo: emp.employeeNo,
+
+    dataRows = allRows.map(row => {
+      const shiftId = row._shiftText === '白班' ? 1 : 2;
+      const meetingRec = rawData.manpowerDetailList.find(m => m.employeeNo === row.employeeNo && m.shiftId === shiftId);
+      const signRec = rawData.swipeCardSignList.find(s => s.employeeNo === row.employeeNo && s.shiftId === shiftId);
+      const skillRec = rawData.staffScheduleInfoList.find(s => s.employeeNo === row.employeeNo && s.shiftId === shiftId && s.status === '已刷卡');
+      const esdStatus = row.lasttimeEsd ? '已测' : '未测';
+      
+      const dataRow = {
+        _shiftText: row._shiftText,
+        l3OrganizationCn: row.l3OrganizationCn,
+        l4OrganizationCn: row.l4OrganizationCn,
+        l5OrganizationCn: row.l5OrganizationCn,
+        organizationNameCn: row.organizationNameCn,
+        employeeName: row.employeeName,
+        employeeNo: row.employeeNo,
         esdStatus
-      }
+      };
       if (queryType.value === 'all' || queryType.value === 'morningMeeting') {
-        row.meetingStatus = meetingRec ? '已点名' : '未点名'
-        row.meetingTime = meetingRec ? meetingRec.createTime : ''
-        row.submitter = meetingRec ? meetingRec.createBy : ''
+        dataRow.meetingStatus = meetingRec ? '已点名' : '未点名';
+        dataRow.meetingTime = meetingRec ? meetingRec.createTime : '';
+        dataRow.submitter = meetingRec ? meetingRec.createBy : '';
       }
       if (queryType.value === 'all' || queryType.value === 'swipeSign') {
-        row.signStatus = signRec ? '已签到' : '未签到'
-        row.signTime = signRec ? signRec.checkTime : ''
+        dataRow.signStatus = signRec ? '已签到' : '未签到';
+        dataRow.signTime = signRec ? signRec.checkTime : '';
       }
       if (queryType.value === 'all' || queryType.value === 'skillSwipe') {
-        row.skillStatus = skillRec ? '已刷卡' : '未刷卡'
-        row.skillTime = skillRec ? skillRec.loginTime : ''
+        dataRow.skillStatus = skillRec ? '已刷卡' : '未刷卡';
+        dataRow.skillTime = skillRec ? skillRec.loginTime : '';
       }
-      return row
-    })
-  } else if (metricType === 'leaveManpower') {
-    const records = getLeaveRecordsByDeptAndShift(deptNode, shiftId, 'leave')
+      return dataRow;
+    });
+  }
+  else if (metricType === 'skillSwipe') {
     columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
+      { prop: 'l3OrganizationCn', label: '三层部门', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'loginTime', label: '刷卡时间', width: 160 }
+    ];
+    dataRows = allRows.map(row => ({
+      _shiftText: row._shiftText,
+      l3OrganizationCn: row.l3OrganizationCn,
+      l4OrganizationCn: row.l4OrganizationCn,
+      l5OrganizationCn: row.l5OrganizationCn,
+      organizationNameCn: row.organizationNameCn,
+      employeeName: row.employeeName,
+      employeeNo: row.employeeNo,
+      loginTime: row.loginTime || ''
+    }));
+  }
+  else if (metricType === 'morningMeeting') {
+    columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
+      { prop: 'l3OrganizationCn', label: '三层部门', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'createTime', label: '点名时间', width: 160 },
+      { prop: 'submitter', label: '提交人', width: 100 }
+    ];
+    dataRows = allRows.map(row => ({
+      _shiftText: row._shiftText,
+      l3OrganizationCn: row.l3OrganizationCn,
+      l4OrganizationCn: row.l4OrganizationCn,
+      l5OrganizationCn: row.l5OrganizationCn,
+      organizationNameCn: row.organizationNameCn,
+      employeeName: row.employeeName,
+      employeeNo: row.employeeNo,
+      createTime: row.createTime || '',
+      submitter: row.createBy || ''
+    }));
+  }
+  else if (metricType === 'swipeSign') {
+    columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
+      { prop: 'l3OrganizationCn', label: '三层部门', width: 120 },
+      { prop: 'l4OrganizationCn', label: '四层部门', width: 120 },
+      { prop: 'l5OrganizationCn', label: '五层部门', width: 120 },
+      { prop: 'organizationNameCn', label: '最小部门', width: 130 },
+      { prop: 'employeeName', label: '姓名', width: 80 },
+      { prop: 'employeeNo', label: '工号', width: 100 },
+      { prop: 'signTime', label: '签到时间', width: 160 }
+    ];
+    dataRows = allRows.map(row => ({
+      _shiftText: row._shiftText,
+      l3OrganizationCn: row.l3OrganizationCn,
+      l4OrganizationCn: row.l4OrganizationCn,
+      l5OrganizationCn: row.l5OrganizationCn,
+      organizationNameCn: row.organizationNameCn,
+      employeeName: row.employeeName,
+      employeeNo: row.employeeNo,
+      signTime: row.signTime || ''
+    }));
+  }
+  else if (metricType === 'leaveManpower') {
+    columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
       { prop: 'userName', label: '姓名', width: 100 },
       { prop: 'userId', label: '工号', width: 120 },
       { prop: 'toOrgName', label: '请假部门', width: 150 },
       { prop: 'status', label: '状态', width: 100 }
-    ]
-    dataRows = records.map(rec => ({
-      userName: rec.userName,
-      userId: rec.userId,
-      toOrgName: rec.toOrgName,
-      status: rec.status
-    }))
-  } else if (metricType === 'receiveSupport') {
-    const records = getLeaveRecordsByDeptAndShift(deptNode, shiftId, 'receive')
+    ];
+    dataRows = allRows.map(r => ({
+      _shiftText: r._shiftText,
+      userName: r.userName,
+      userId: r.userId,
+      toOrgName: r.toOrgName,
+      status: r.status
+    }));
+  }
+  else if (metricType === 'receiveSupport') {
     columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
       { prop: 'userName', label: '姓名', width: 100 },
       { prop: 'userId', label: '工号', width: 120 },
       { prop: 'fromOrgName', label: '来源部门', width: 150 },
       { prop: 'toOrgName', label: '接收部门', width: 150 },
       { prop: 'status', label: '状态', width: 100 },
       { prop: 'isAttended', label: '是否出勤', width: 100 }
-    ]
-    dataRows = records.map(rec => {
-      const hasCard = rawData.staffScheduleInfoList.some(s => s.employeeNo === rec.userId && s.shiftId === shiftId && s.status === '已刷卡')
-      return {
-        userName: rec.userName,
-        userId: rec.userId,
-        fromOrgName: rec.fromOrgName,
-        toOrgName: rec.toOrgName,
-        status: rec.status,
-        isAttended: hasCard ? '已出勤' : '未出勤'
-      }
-    })
-  } else if (metricType === 'outSupport') {
-    const records = getLeaveRecordsByDeptAndShift(deptNode, shiftId, 'out')
+    ];
+    dataRows = allRows.map(r => ({
+      _shiftText: r._shiftText,
+      userName: r.userName,
+      userId: r.userId,
+      fromOrgName: r.fromOrgName,
+      toOrgName: r.toOrgName,
+      status: r.status,
+      isAttended: r.isAttended || '未出勤'
+    }));
+  }
+  else if (metricType === 'outSupport') {
     columns = [
+      { prop: '_shiftText', label: '班次', width: 80 },
       { prop: 'userName', label: '姓名', width: 100 },
       { prop: 'userId', label: '工号', width: 120 },
       { prop: 'fromOrgName', label: '派出部门', width: 150 },
       { prop: 'toOrgName', label: '目标部门', width: 150 },
       { prop: 'status', label: '状态', width: 100 }
-    ]
-    dataRows = records.map(rec => ({
-      userName: rec.userName,
-      userId: rec.userId,
-      fromOrgName: rec.fromOrgName,
-      toOrgName: rec.toOrgName,
-      status: rec.status
-    }))
+    ];
+    dataRows = allRows.map(r => ({
+      _shiftText: r._shiftText,
+      userName: r.userName,
+      userId: r.userId,
+      fromOrgName: r.fromOrgName,
+      toOrgName: r.toOrgName,
+      status: r.status
+    }));
   }
-  return { columns, dataRows }
-}
+
+  return { columns, dataRows };
+};
 
 // 点击数字查看明细
 const handleNumberClick = async (row, shift, metricType, value) => {
@@ -750,5 +871,114 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 样式与之前相同，省略 */
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.left-panel {
+  width: 20%;
+  background-color: #f5f7fa;
+  border-right: 1px solid #e4e7ed;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 16px 12px;
+}
+
+.dept-header {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #303133;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
+}
+
+.custom-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.right-panel {
+  width: 80%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.top-bar {
+  padding: 16px 20px;
+  background-color: #fff;
+  border-bottom: 1px solid #ebeef5;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.filter-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.middle-table {
+  flex: 1;
+  padding: 16px 20px;
+  overflow: auto;
+  background-color: #fff;
+}
+
+.clickable-number {
+  cursor: pointer;
+  color: #409eff;
+  font-weight: 500;
+  display: inline-block;
+  width: 100%;
+}
+.clickable-number:hover {
+  color: #66b1ff;
+  text-decoration: underline;
+}
+
+.bottom-detail {
+  border-top: 2px solid #e4e7ed;
+  background-color: #f9fafc;
+  padding: 12px 20px 20px 20px;
+  max-height: 45%;
+  overflow: auto;
+  transition: all 0.2s;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dcdfe6;
+}
+
+.detail-header .title-info {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  background: #ecf5ff;
+  padding: 4px 12px;
+  border-radius: 16px;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #dcdfe6;
+  border-radius: 3px;
+}
 </style>
