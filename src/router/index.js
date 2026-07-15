@@ -17,7 +17,7 @@ const router = createRouter({
     {
       path: '/deptHuman',
       name: 'deptHuman',
-      component: () => import('@/views/NewDeptHuman.vue'),
+      component: () => import('@/views/DeptHuman/Zhiyuan.vue'),
     },
     {
       path: '/about',
