@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('@/views/DeptHuman/Zhiyuan.vue'),
     },
     {
+      path: '/paiban',
+      name: 'paiban',
+      component: () => import('@/views/paiban/Index.vue'),
+    },
+    {
       path: '/about',
       name: 'about',
       // route level code-splitting
