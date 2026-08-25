@@ -25,6 +25,11 @@ const router = createRouter({
       component: () => import('@/views/paiban/Index.vue'),
     },
     {
+      path: '/paiban2',
+      name: 'paiban2',
+      component: () => import('@/views/paiban copy/Index.vue'),
+    },
+    {
       path: '/about',
       name: 'about',
       // route level code-splitting
